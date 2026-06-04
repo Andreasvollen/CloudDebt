@@ -4,85 +4,46 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Platform Decision Tool</title>
-    <script src="https://unpkg.com/react@18/umd/react.production.min.js" crossorigin></script>
-    <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js" crossorigin></script>
-    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
-    <script src="https://unpkg.com/lucide@latest"></script>
-    <script src="https://unpkg.com/lucide-react@latest"></script>
     <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        input[type="range"] { accent-color: #0D7A56; }
+    </style>
 </head>
-<body class="bg-[#F5F4F0] text-[#1C1B18] antialiased">
+<body class="bg-[#F5F4F0] text-[#1C1B18] antialiased min-h-screen flex flex-col">
 
-    <div id="root"></div>
+    <header class="bg-white border-b border-gray-200 px-6 py-3.5 flex justify-between items-center sticky top-0 z-10 shadow-sm">
+        <div class="flex items-center gap-2.5">
+            <div class="w-7 h-7 rounded-lg bg-[#0D7A56] flex items-center justify-center text-white font-black text-sm shadow-sm">P</div>
+            <div>
+                <span class="font-bold text-gray-800 text-sm tracking-tight block">Platform Decision Tool</span>
+                <span class="text-[10px] text-gray-400 font-medium block -mt-0.5">Sopra Steria Transformation</span>
+            </div>
+        </div>
+        <div id="header-badge" class="text-[11px] font-bold text-gray-400 bg-gray-50 border border-gray-100 rounded-full px-3 py-1">
+            0 aktive valg
+        </div>
+    </header>
 
-    <script type="text/babel">
-        const { useState, useEffect } = React;
-        
-        // Henter ikoner trygt fra lucideReact-pakken
-        const { 
-          Plus, ArrowLeft, ArrowRight, Check, Trash2, 
-          AlertTriangle, Info, CheckCircle, Layers 
-        } = lucideReact;
+    <main class="max-w-5xl w-full mx-auto px-6 py-8 flex-1" id="main-content">
+        </main>
 
-        // ─── CONSTANTS ────────────────────────────────────────────────────────────────
+    <script>
+        // ─── STATE & CONSTANTS ────────────────────────────────────────────────────────
+        let view = "dashboard"; // eller "wizard"
+        let currentStep = 0;
+        let decisions = JSON.parse(localStorage.getItem("platform_decisions")) || [];
+
         const DEBT_CATEGORIES = [
-          { key:"ideology",    name:"Ideologi",         short:"Ideologi",    desc:"Teknologibias og leverandørpreferanser som skaper sub-optimale path-dependencies", q:"Er valget drevet av teknisk modenhet, eller av interne preferanser for kjente leverandører?" },
-          { key:"competence",  name:"Kompetanse",        short:"Kompetanse",  desc:"Intern vs. ekstern kompetanse, opplæringsbehov og kognitiv belastning (Team Topologies)", q:"Frigjør eller krever valget intern spesialistkompetanse? Øker det teamets kognitive belastning?" },
-          { key:"working_env", name:"Arbeidsmiljø",      short:"Arbeidsmiljø",desc:"Kultur, DevEx og organisatorisk absorbsjonsevne", q:"Forbedrer valget utvikleropplevelsen (DevEx)? Reduserer det friksjon i hverdagen?" },
-          { key:"user_sat",    name:"Brukertilfredshet", short:"Brukertilf.", desc:"Sluttbrukernes opplevelse av IT-leveransen", q:"Påvirker valget sluttbrukernes arbeidsflyt positivt eller negativt?" },
-          { key:"reputation",  name:"Omdømme",           short:"Omdømme",     desc:"Intern tillit til IT-funksjonen og leveranseevne over tid", q:"Styrker valget tilliten til plattformteamet, eller skaper det ny skepsis?" },
-          { key:"infra",       name:"Infrastruktur",     short:"Infra",       desc:"Driftsintensitet, IaC-gjeld, lock-in og fremtidig endringsevne", q:"Reduserer valget driftsoverhead? Skaper det ny vendor lock-in?" },
-          { key:"shadow_it",   name:"Shadow IT",         short:"Shadow IT",   desc:"Desentraliserte investeringer og workarounds utenfor plattformens kontroll", q:"Reduserer valget behovet for workarounds, eller driver det nye desentraliserte løsninger?" },
-          { key:"technical",   name:"Teknisk gjeld",     short:"Teknisk",     desc:"Dokumentasjon, automatisering, IaC-drift og vedlikeholdskostnader", q:"Er løsningen kodifisert i IaC? Reduserer den fremtidig vedlikeholdskostnad?" },
-          { key:"governance",  name:"Governance",        short:"Governance",  desc:"Beslutningsstrukturer, compliance-overhead og kontrollmekanismer", q:"Forenkler valget godkjenningsprosesser, eller legger det til nye kontrollkrav?" },
+          { key:"ideology",    name:"Ideologi",         desc:"Teknologibias og leverandørpreferanser som skaper sub-optimale path-dependencies", q:"Er valget drevet av teknisk modenhet, eller av interne preferanser for kjente leverandører?" },
+          { key:"competence",  name:"Kompetanse",        desc:"Intern vs. ekstern kompetanse, opplæringsbehov og kognitiv belastning (Team Topologies)", q:"Frigjør eller krever valget intern spesialistkompetanse? Øker det teamets kognitive belastning?" },
+          { key:"working_env", name:"Arbeidsmiljø",      desc:"Kultur, DevEx og organisatorisk absorbsjonsevne", q:"Forbedrer valget utvikleropplevelsen (DevEx)? Reduserer det friksjon i hverdagen?" },
+          { key:"user_sat",    name:"Brukertilfredshet", desc:"Sluttbrukernes opplevelse av IT-leveransen", q:"Påvirker valget sluttbrukernes arbeidsflyt positivt eller negativt?" },
+          { key:"reputation",  name:"Omdømme",           desc:"Intern tillit til IT-funksjonen og leveranseevne over tid", q:"Styrker valget tilliten til plattformteamet, eller skaper det ny skepsis?" },
+          { key:"infra",       name:"Infrastruktur",     desc:"Driftsintensitet, IaC-gjeld, lock-in og fremtidig endringsevne", q:"Reduserer valget driftsoverhead? Skaper det ny vendor lock-in?" },
+          { key:"shadow_it",   name:"Shadow IT",         desc:"Desentraliserte investeringer og workarounds utenfor plattformens kontroll", q:"Reduserer valget behovet for workarounds, eller driver det nye desentraliserte løsninger?" },
+          { key:"technical",   name:"Teknisk gjeld",     desc:"Dokumentasjon, automatisering, IaC-drift og vedlikeholdskostnader", q:"Er løsningen kodifisert i IaC? Reduserer den fremtidig vedlikeholdskostnad?" },
+          { key:"governance",  name:"Governance",        desc:"Beslutningsstrukturer, compliance-overhead og kontrollmekanismer", q:"Forenkler valget godkjenningsprosesser, eller legger det til nye kontrollkrav?" }
         ];
-
-        const TYPE_CONFIG = {
-          tech: {
-            label:"Teknologivalg", emoji:"⚙️",
-            desc:"Innføring, endring eller utfasing av tekniske løsninger og plattformer",
-            whatLabel:"Hva innføres, endres eller fjernes?",
-            whatPh:"F.eks. Azure Firewall — managed cloud-brannmur",
-            whatHint:"Beskriv løsningen. Ikke nødvendigvis et enten/eller-bytte.",
-            effects:["Reduserer driftsoverhead","Øker automatisering","Frigjør intern kapasitet","Forbedrer integrasjonsevne","Muliggjør ny kapabilitet","Reduserer vendor lock-in","Forbedrer sikkerhet/compliance","Reduserer teknisk gjeld"],
-            optLabel:"Erstatter eventuelt eksisterende løsning (valgfritt)",
-            optPh:"F.eks. Palo Alto on-prem med manuell patching",
-            orientHint:"Teknologivalg heller oftest mot exploitasjon (effektivitet), men kan åpne for ny eksperimentering.",
-          },
-          org: {
-            label:"Organisasjonsvalg", emoji:"🏗️",
-            desc:"Endringer i teamstruktur, ansvar, kompetansemodell eller styringsstruktur",
-            whatLabel:"Hva endres strukturelt eller i ansvarsforhold?",
-            whatPh:"F.eks. Omstrukturering til plattformteam (Team Topologies)",
-            whatHint:"Beskriv endringen i struktur, ansvar, kompetanse eller beslutningsmodell.",
-            effects:["Sentralisering av beslutninger","Desentralisering / økt autonomi","Ny rollestruktur / ansvarsfordeling","Redusert kognitiv belastning","Kompetanseoverføring internt","Outsourcing / insourcing","Bedre alignment IT og forretning","Styrket innovasjonsevne"],
-            optLabel:"Hvem påvirkes primært? (valgfritt)",
-            optPh:"F.eks. Platform-teamet og stream-aligned teams",
-            orientHint:"Organisasjonsvalg berører ambideksteri direkte — balansen mellom effektiv drift og utforskende kapabilitet.",
-          },
-          process: {
-            label:"Prosessvalg", emoji:"🔄",
-            desc:"Innføring eller endring av arbeidsmetodikk, leveranseprosess eller rutiner",
-            whatLabel:"Hvilken prosess innføres, endres eller fjernes?",
-            whatPh:"F.eks. Innføring av CI/CD-pipeline for infrastrukturendringer (IaC)",
-            whatHint:"Beskriv prosessen og hva som endres i arbeidsflyten.",
-            effects:["Kortere leveransetid","Redusert manuelt arbeid","Bedre compliance-håndtering","Økt kvalitetssikring","Raskere feilretting (MTTR)","Bedre synlighet og sporbarhet","Mer forutsigbar leveranse","Redusert endringsrisiko"],
-            optLabel:"Erstatter eventuelt eksisterende prosess (valgfritt)",
-            optPh:"F.eks. Manuell godkjenningsprosess via e-post",
-            orientHint:"Prosessvalg driver oftest exploitasjon, men kan frigjøre kapasitet til explorasjon.",
-          },
-          design: {
-            label:"Designvalg", emoji:"🧩",
-            desc:"Arkitektur- og designbeslutninger som former plattformens langsiktige endringsevne",
-            whatLabel:"Hvilket arkitekturprinsipp eller designvalg tas?",
-            whatPh:"F.eks. Microservices-integrasjonslag med API-first tilnærming",
-            whatHint:"Beskriv prinsippet og hva det innebærer for arkitektur og fremtidig endringsevne.",
-            effects:["Løsere kobling mellom tjenester","Bedre skalerbarhet","Økt gjenbruk på tvers av team","Redusert kompleksitet","API-first tilnærming","Redusert lock-in","Enklere partneronboarding","Bedre fremtidig endringsevne"],
-            optLabel:"Kjent avveiing / trade-off (valgfritt)",
-            optPh:"F.eks. Økt initiell kompleksitet mot langsiktig fleksibilitet",
-            orientHint:"Designvalg har stor langsiktig effekt på organisasjonens evne til å balansere drift og innovasjon.",
-          },
-        };
 
         const TENSIONS = [
           { key:"alignment", label:"Alignment",   desc:"Forretningstransformasjon ↔ Medarbeidertransformasjon" },
@@ -93,462 +54,356 @@
           { key:"risk",      label:"Risiko",       desc:"Innovasjon og eksperimentering ↔ Compliance og kontroll" },
           { key:"objective", label:"Målsetting",   desc:"Ny digital kapabilitet ↔ Digital infrastruktur" },
           { key:"value",     label:"Verdiskaping", desc:"Kundeverdi ↔ Aksjonærverdi" },
-          { key:"agenda",    label:"Agenda",       desc:"Digital transformasjon ↔ Digitalisering" },
+          { key:"agenda",    label:"Agenda",       desc:"Digital transformasjon ↔ Digitalisering" }
         ];
 
-        const PHASES = ["Assimilering", "Rekonstruksjon", "Materialisering"];
-        const emptyDebts = () => Object.fromEntries(DEBT_CATEGORIES.map(c => [c.key, 0]));
-        const fmt = n => Math.round(n).toLocaleString("nb-NO");
-
-        const lbl = (txt, hint) => (
-          <div className="mb-1.5">
-            <div className="text-xs font-bold text-gray-500 uppercase tracking-wider">{txt}</div>
-            {hint && <div className="text-[11px] text-gray-400 mt-0.5 leading-relaxed">{hint}</div>}
-          </div>
-        );
-
-        function TypeBadge({ type }) {
-          const cfg = TYPE_CONFIG[type] || TYPE_CONFIG.tech;
-          const styles = {
-            tech: "bg-blue-50 text-blue-700 border-blue-200",
-            org: "bg-purple-50 text-purple-700 border-purple-200",
-            process: "bg-green-50 text-green-700 border-green-200",
-            design: "bg-amber-50 text-amber-700 border-amber-200"
-          }[type] || "bg-blue-50 text-blue-700 border-blue-200";
-          return <span className={`text-[11px] px-2.5 py-0.5 rounded-full font-semibold border ${styles}`}>{cfg.label}</span>;
+        let wizardData = {};
+        function resetWizard() {
+            wizardData = {
+                name: "", type: "tech", phase: "Assimilering", what: "", effect: "", replaces: "", tension: "", orient: 50,
+                debts: { ideology:0, competence:0, working_env:0, user_sat:0, reputation:0, infra:0, shadow_it:0, technical:0, governance:0 },
+                cost: "", hours: "", hourRate: 1100, horizons: 8, prob: 0.7, absorb: 0.6
+            };
+            currentStep = 0;
         }
 
-        const Tip = ({ content, color }) => {
-          const bg = color==="green"?"#E6F5EE":color==="red"?"#FDF0EC":"#FDF6E0";
-          const bc = color==="green"?"#A8DCC4":color==="red"?"#F0B8A4":"#E8CC7A";
-          const tc = color==="green"?"#0D7A56":color==="red"?"#B83820":"#8C6200";
-          const Icon = color==="green"?CheckCircle:AlertTriangle;
-          return (
-            <div style={{ display:"flex", gap:10, background:bg, border:`1px solid ${bc}`, borderRadius:10, padding:"12px 16px", fontSize:13, color:tc, lineHeight:1.6, marginTop:12 }}>
-              <Icon size={15} style={{ flexShrink:0, marginTop:2 }}/>
-              <span>{content}</span>
-            </div>
-          );
-        };
+        // ─── HELPER FUNCTIONS ────────────────────────────────────────────────────────
+        const fmt = n => Math.round(n).toLocaleString("nb-NO");
+        function saveToStorage() { localStorage.setItem("platform_decisions", JSON.stringify(decisions)); }
 
-        // ─── DASHBOARD ────────────────────────────────────────────────────────────────
-        function Dashboard({ decisions, onNew, onDelete }) {
-          const totalDebt = decisions.reduce((s,d) => s + Object.values(d.debts).reduce((a,b)=>a+b,0), 0);
-          const totalCap  = decisions.reduce((s,d) => s + (d.hours||0)*(d.horizons||1), 0);
-          const totalXV   = decisions.reduce((s,d) => s + (d.xv||0), 0);
-          const totalCost = decisions.reduce((s,d) => s + (d.cost||0), 0);
-          const freedKr   = decisions.reduce((s,d) => s + (d.hours||0)*(d.hourRate||1100)*(d.horizons||1), 0);
-          const xvEff     = totalCost > 0 ? totalXV/totalCost : null;
+        // ─── RENDER LOGIC ────────────────────────────────────────────────────────────
+        function render() {
+            document.getElementById("header-badge").innerText = `${decisions.length} aktive valg i nettleseren`;
+            const main = document.getElementById("main-content");
+            
+            if (view === "dashboard") {
+                renderDashboard(main);
+            } else {
+                renderWizard(main);
+            }
+        }
 
-          return (
-            <div className="space-y-6">
-              <div className="flex justify-between items-start">
-                <div>
-                  <h1 className="text-3xl font-bold tracking-tight text-gray-900">Platform Decision Tool</h1>
-                  <p className="text-sm text-gray-500 mt-1 max-w-xl">Mål digital gjeld og forventet verdi for plattformvalg. Bruk i workshop for å synliggjøre hva hvert valg koster — og frigjør.</p>
-                </div>
-                <button onClick={onNew} className="bg-[#0D7A56] hover:bg-[#0a5e42] text-white px-5 py-2.5 rounded-lg text-sm font-semibold flex items-center gap-2 shadow-sm transition-colors">
-                  <Plus size={16}/> Nytt valg
-                </button>
-              </div>
+        function renderDashboard(target) {
+            const totalDebt = decisions.reduce((s,d) => s + Object.values(d.debts).reduce((a,b)=>a+b,0), 0);
+            const totalCap  = decisions.reduce((s,d) => s + (Number(d.hours)||0)*(Number(d.horizons)||1), 0);
+            const totalXV   = decisions.reduce((s,d) => s + (Number(d.xv)||0), 0);
+            const totalCost = decisions.reduce((s,d) => s + (Number(d.cost)||0), 0);
+            const freedKr   = decisions.reduce((s,d) => s + (Number(d.hours)||0)*(Number(d.hourRate)||1100)*(Number(d.horizons)||1), 0);
+            const xvEff     = totalCost > 0 ? totalXV/totalCost : null;
 
-              <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-                <div className={`p-5 rounded-xl border border-gray-200 shadow-sm ${totalDebt<0?'bg-green-50':totalDebt>0?'bg-red-50':'bg-white'}`}>
-                  <div className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Netto gjeld</div>
-                  <div className={`text-2xl font-bold mt-1.5 ${totalDebt<0?'text-green-700':totalDebt>0?'text-red-700':'text-gray-800'}`}>{totalDebt>0?"+":""}{totalDebt}</div>
-                  <div className="text-xs text-gray-500 mt-1">{totalDebt<0?"Netto amortisering":totalDebt>0?"Netto gjeldsvekst":"Nøytral balanse"}</div>
-                </div>
-                <div className="bg-white p-5 rounded-xl border border-gray-200 shadow-sm">
-                  <div className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Frigjort verdi</div>
-                  <div className="text-2xl font-bold text-green-700 mt-1.5">{freedKr>0?"kr "+fmt(freedKr):"–"}</div>
-                  <div className="text-xs text-gray-500 mt-1">{totalCap>0?fmt(totalCap)+" timer frigjort":"Ingen data"}</div>
-                </div>
-                <div className="bg-white p-5 rounded-xl border border-gray-200 shadow-sm">
-                  <div className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Forventet verdi (xV)</div>
-                  <div className="text-2xl font-bold text-gray-800 mt-1.5">{totalXV>0?"kr "+fmt(totalXV):"–"}</div>
-                  <div className="text-xs text-gray-500 mt-1">{xvEff!=null?"Effektivitet: "+xvEff.toFixed(2)+"x":"Mangler kostnad"}</div>
-                </div>
-                <div className="bg-white p-5 rounded-xl border border-gray-200 shadow-sm">
-                  <div className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Valg registrert</div>
-                  <div className="text-2xl font-bold text-gray-800 mt-1.5">{decisions.length}</div>
-                  <div className="text-xs text-gray-500 mt-1">{totalCost>0?"Total kost: kr "+fmt(totalCost):"I denne sesjonen"}</div>
-                </div>
-              </div>
+            let html = `
+                <div class="space-y-6">
+                    <div class="flex justify-between items-start">
+                        <div>
+                            <h1 class="text-3xl font-bold tracking-tight text-gray-900">Platform Decision Tool</h1>
+                            <p class="text-sm text-gray-500 mt-1 max-w-xl">Mål digital gjeld og forventet verdi for plattformvalg. Bruk i workshop for å synliggjøre hva hvert valg koster — og frigjør.</p>
+                        </div>
+                        <button onclick="view='wizard'; resetWizard(); render();" class="bg-[#0D7A56] hover:bg-[#0a5e42] text-white px-5 py-2.5 rounded-lg text-sm font-semibold flex items-center gap-2 shadow-sm transition-colors">
+                            ➕ Nytt valg
+                        </button>
+                    </div>
 
-              <div className="space-y-3">
-                <h3 className="text-xs font-bold uppercase tracking-wider text-gray-400">Registrerte plattformvalg</h3>
-                {decisions.length === 0 ? (
-                  <div className="border-2 border-dashed border-gray-200 rounded-xl p-12 text-center bg-white shadow-sm">
-                    <Layers className="mx-auto text-gray-300 mb-3" size={32}/>
-                    <h4 className="font-semibold text-gray-700 text-sm">Ingen valg opprettet ennå</h4>
-                    <p className="text-xs text-gray-400 max-w-xs mx-auto mt-1 mb-4">Start arkitektur- og teamdiskusjonen ved å legge til det første valget.</p>
-                    <button onClick={onNew} className="inline-flex items-center gap-1.5 bg-[#0D7A56] text-white px-4 py-1.5 text-xs font-semibold rounded-lg shadow-sm">
-                      <Plus size={14}/> Legg til første valg
-                    </button>
-                  </div>
-                ) : (
-                  <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                    {decisions.map(d => {
-                      const nd = Object.values(d.debts).reduce((a,b)=>a+b,0);
-                      const capKr = (d.hours||0)*(d.hourRate||1100)*(d.horizons||1);
-                      const tension = d.tension ? TENSIONS.find(t=>t.key===d.tension) : null;
-                      return (
-                        <div key={d.id} className="bg-white border border-gray-200 rounded-xl shadow-sm overflow-hidden flex flex-col justify-between">
-                          <div className="p-4 space-y-3">
-                            <div className="flex justify-between items-center">
-                              <TypeBadge type={d.type}/>
-                              <div className="flex items-center gap-2">
-                                <span className="text-[10px] text-gray-400 font-medium">{d.phase}</span>
-                                <button onClick={()=>onDelete(d.id)} className="text-gray-300 hover:text-red-600 p-0.5 transition-colors">
-                                  <Trash2 size={13}/>
-                                </button>
-                              </div>
+                    <div class="grid grid-cols-1 md:grid-cols-4 gap-4">
+                        <div class="p-5 rounded-xl border border-gray-200 shadow-sm ${totalDebt < 0 ? 'bg-green-50' : totalDebt > 0 ? 'bg-red-50' : 'bg-white'}">
+                            <div class="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Netto gjeld</div>
+                            <div class="text-2xl font-bold mt-1.5 ${totalDebt < 0 ? 'text-green-700' : totalDebt > 0 ? 'text-red-700' : 'text-gray-800'}">${totalDebt > 0 ? "+" : ""}${totalDebt}</div>
+                            <div class="text-xs text-gray-500 mt-1">${totalDebt < 0 ? "Netto amortisering" : totalDebt > 0 ? "Netto gjeldsvekst" : "Nøytral balanse"}</div>
+                        </div>
+                        <div class="bg-white p-5 rounded-xl border border-gray-200 shadow-sm">
+                            <div class="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Frigjort verdi</div>
+                            <div class="text-2xl font-bold text-green-700 mt-1.5">${freedKr > 0 ? "kr " + fmt(freedKr) : "–"}</div>
+                            <div class="text-xs text-gray-500 mt-1">${totalCap > 0 ? fmt(totalCap) + " timer frigjort" : "Ingen data"}</div>
+                        </div>
+                        <div class="bg-white p-5 rounded-xl border border-gray-200 shadow-sm">
+                            <div class="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Forventet verdi (xV)</div>
+                            <div class="text-2xl font-bold text-gray-800 mt-1.5">${totalXV > 0 ? "kr " + fmt(totalXV) : "–"}</div>
+                            <div class="text-xs text-gray-500 mt-1">${xvEff != null ? "Effektivitet: " + xvEff.toFixed(2) + "x" : "Mangler kostnad"}</div>
+                        </div>
+                        <div class="bg-white p-5 rounded-xl border border-gray-200 shadow-sm">
+                            <div class="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Valg registrert</div>
+                            <div class="text-2xl font-bold text-gray-800 mt-1.5">${decisions.length}</div>
+                            <div class="text-xs text-gray-500 mt-1">${totalCost > 0 ? "Total kost: kr " + fmt(totalCost) : "I denne sesjonen"}</div>
+                        </div>
+                    </div>
+
+                    <div class="space-y-3">
+                        <h3 class="text-xs font-bold uppercase tracking-wider text-gray-400">Registrerte plattformvalg</h3>
+            `;
+
+            if (decisions.length === 0) {
+                html += `
+                    <div class="border-2 border-dashed border-gray-200 rounded-xl p-12 text-center bg-white shadow-sm">
+                        <div class="text-3xl mb-2">📁</div>
+                        <h4 class="font-semibold text-gray-700 text-sm">Ingen valg opprettet ennå</h4>
+                        <p class="text-xs text-gray-400 max-w-xs mx-auto mt-1 mb-4">Start arkitektur- og teamdiskusjonen ved å legge til det første valget.</p>
+                        <button onclick="view='wizard'; resetWizard(); render();" class="inline-flex items-center gap-1.5 bg-[#0D7A56] text-white px-4 py-1.5 text-xs font-semibold rounded-lg shadow-sm">➕ Legg til første valg</button>
+                    </div>
+                `;
+            } else {
+                html += `<div class="grid grid-cols-1 md:grid-cols-3 gap-4">`;
+                decisions.forEach(d => {
+                    const nd = Object.values(d.debts).reduce((a,b)=>a+b,0);
+                    const capKr = (Number(d.hours)||0)*(Number(d.hourRate)||1100)*(Number(d.horizons)||1);
+                    const tension = TENSIONS.find(t=>t.key===d.tension);
+                    const badgeStyles = d.type==='tech'?'bg-blue-50 text-blue-700 border-blue-200':d.type==='org'?'bg-purple-50 text-purple-700 border-purple-200':d.type==='process'?'bg-green-50 text-green-700 border-green-200':'bg-amber-50 text-amber-700 border-amber-200';
+                    const typeLabels = {tech:'Teknologivalg', org:'Organisasjonsvalg', process:'Prosessvalg', design:'Designvalg'};
+
+                    html += `
+                        <div class="bg-white border border-gray-200 rounded-xl shadow-sm overflow-hidden flex flex-col justify-between">
+                            <div class="p-4 space-y-3">
+                                <div class="flex justify-between items-center">
+                                    <span class="text-[11px] px-2.5 py-0.5 rounded-full font-semibold border ${badgeStyles}">${typeLabels[d.type]}</span>
+                                    <div class="flex items-center gap-2">
+                                        <span class="text-[10px] text-gray-400 font-medium">${d.phase}</span>
+                                        <button onclick="deleteDecision(${d.id})" class="text-gray-300 hover:text-red-600 p-0.5 transition-colors">🗑️</button>
+                                    </div>
+                                </div>
+                                <div>
+                                    <h4 class="font-bold text-gray-900 text-sm leading-tight">${d.name || 'Navnløst valg'}</h4>
+                                    ${d.what ? `<p class="text-xs text-gray-500 mt-1 line-clamp-2">${d.what}</p>` : ''}
+                                </div>
+                                ${d.effect ? `<div class="inline-flex items-center gap-1 bg-green-50 border border-green-100 text-green-700 text-[10px] font-bold px-2 py-0.5 rounded-full">✓ ${d.effect}</div>` : ''}
+                                ${tension ? `<div class="text-[10px] bg-blue-50 text-blue-700 border border-blue-100 px-2 py-0.5 rounded-md inline-block">↔ ${tension.label}</div>` : ''}
+                            </div>
+                            <div class="border-t border-gray-100 grid grid-cols-3 bg-gray-50 text-center text-[11px] divide-x divide-gray-100">
+                                <div class="py-2">
+                                    <div class="text-[9px] text-gray-400 font-bold uppercase">Gjeld</div>
+                                    <div class="font-bold mt-0.5 ${nd>0?'text-red-600':nd<0?'text-green-600':'text-gray-600'}">${nd>0?"+":""}${nd}</div>
+                                </div>
+                                <div class="py-2">
+                                    <div class="text-[9px] text-gray-400 font-bold uppercase">xV-Eff.</div>
+                                    <div class="font-bold mt-0.5 ${d.eff>=1?'text-green-600':d.eff!=null?'text-red-600':'text-gray-400'}">${d.eff!=null?Number(d.eff).toFixed(1)+"x":"–"}</div>
+                                </div>
+                                <div class="py-2">
+                                    <div class="text-[9px] text-gray-400 font-bold uppercase">Frigjort</div>
+                                    <div class="font-bold mt-0.5 text-gray-700">${capKr>0?"kr "+fmt(capKr):"–"}</div>
+                                </div>
+                            </div>
+                        </div>
+                    `;
+                });
+                html += `</div>`;
+            }
+            html += `</div></div>`;
+            target.innerHTML = html;
+        }
+
+        function renderWizard(target) {
+            let stepsHeader = `
+                <div class="space-y-6">
+                    <div class="flex justify-between items-center bg-white border border-gray-200 rounded-xl p-3 shadow-sm">
+                        <button onclick="view='dashboard'; render();" class="text-xs font-semibold text-gray-500 hover:text-gray-700 px-3 py-1.5 border border-gray-200 rounded-lg flex items-center gap-1 bg-white shadow-sm">⬅ Avbryt</button>
+                        <div class="flex items-center gap-1.5 text-xs font-bold text-gray-400">
+                            ${["Beskriv","Gjeld","xV-Analyse","Konklusjon"].map((s,i)=>`
+                                <div class="flex items-center gap-1.5">
+                                    <span class="w-5 h-5 rounded-full flex items-center justify-center text-[10px] ${i===currentStep?'bg-[#0D7A56] text-white':'bg-gray-100 text-gray-400'}">${i+1}</span>
+                                    <span class="${i===currentStep?'text-gray-800':''}">${s}</span>
+                                    ${i<3?'<span class="text-gray-200">/</span>':''}
+                                </div>
+                            `).join('')}
+                        </div>
+                    </div>
+                    <div id="step-form-container">
+            `;
+
+            let stepContent = "";
+            if (currentStep === 0) {
+                stepContent = `
+                    <div class="space-y-5">
+                        <div>
+                            <h3 class="text-xs font-bold text-gray-400 uppercase tracking-wider mb-2">Steg 1 · Kategoriser og beskriv valget</h3>
+                            <div class="grid grid-cols-2 md:grid-cols-4 gap-2.5">
+                                ${[['tech','⚙️','Teknologivalg'],['org','🏗️','Organisasjonsvalg'],['process','🔄','Prosessvalg'],['design','🧩','Designvalg']].map(([k,e,l])=>`
+                                    <button onclick="wizardData.type='${k}'; render();" class="p-3 text-left border rounded-xl transition-all ${wizardData.type===k?'border-green-600 bg-green-50/40 shadow-sm':'border-gray-200 bg-white hover:border-gray-300'}">
+                                        <div class="text-lg mb-1.5">${e}</div>
+                                        <div class="text-xs font-bold text-gray-800">${l}</div>
+                                    </button>
+                                `).join('')}
+                            </div>
+                        </div>
+
+                        <div class="bg-white border border-gray-200 rounded-xl p-5 space-y-4 shadow-sm">
+                            <div>
+                                <label class="text-xs font-bold text-gray-500 uppercase tracking-wider block mb-1">Navn på valget</label>
+                                <input type="text" id="w-name" oninput="wizardData.name=this.value" class="w-full border border-gray-300 rounded-lg p-2 text-xs outline-none focus:border-green-600" value="${wizardData.name}" placeholder="F.eks. Azure Firewall eller Ny teamstruktur">
+                            </div>
+                            <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+                                <div class="md:col-span-2">
+                                    <label class="text-xs font-bold text-gray-500 uppercase tracking-wider block mb-1">Hva innebærer endringen?</label>
+                                    <textarea id="w-what" oninput="wizardData.what=this.value" class="w-full border border-gray-300 rounded-lg p-2 text-xs h-20 resize-none outline-none focus:border-green-600" placeholder="Beskriv løsningen kort her...">${wizardData.what}</textarea>
+                                </div>
+                                <div class="space-y-3">
+                                    <div>
+                                        <label class="text-xs font-bold text-gray-500 uppercase tracking-wider block mb-1">Fase</label>
+                                        <select id="w-phase" onchange="wizardData.phase=this.value" class="w-full border border-gray-300 rounded-lg p-2 text-xs bg-white">
+                                            <option ${wizardData.phase==='Assimilering'?'selected':''}>Assimilering</option>
+                                            <option ${wizardData.phase==='Rekonstruksjon'?'selected':''}>Rekonstruksjon</option>
+                                            <option ${wizardData.phase==='Materialisering'?'selected':''}>Materialisering</option>
+                                        </select>
+                                    </div>
+                                    <div>
+                                        <label class="text-xs font-bold text-gray-500 uppercase tracking-wider block mb-1">Primær effekt</label>
+                                        <input type="text" id="w-effect" oninput="wizardData.effect=this.value" class="w-full border border-gray-300 rounded-lg p-2 text-xs outline-none focus:border-green-600" value="${wizardData.effect}" placeholder="F.eks. Redusert driftsoverhead">
+                                    </div>
+                                </div>
                             </div>
                             <div>
-                              <h4 className="font-bold text-gray-900 text-sm leading-tight">{d.name}</h4>
-                              {d.what && <p className="text-xs text-gray-500 mt-1 line-clamp-2">{d.what}</p>}
+                                <label class="text-xs font-bold text-gray-500 uppercase tracking-wider block mb-1">Paradoksal spenning (valgfritt)</label>
+                                <select id="w-tension" onchange="wizardData.tension=this.value" class="w-full border border-gray-300 rounded-lg p-2 text-xs bg-white">
+                                    <option value="">Velg spenning…</option>
+                                    ${TENSIONS.map(t=>`<option value="${t.key}" ${wizardData.tension===t.key?'selected':''}>${t.label} — ${t.desc}</option>`).join('')}
+                                </select>
                             </div>
-                            {d.effect && (
-                              <div className="inline-flex items-center gap-1 bg-green-50 border border-green-100 text-green-700 text-[10px] font-bold px-2 py-0.5 rounded-full">
-                                <Check size={10}/> {d.effect}
-                              </div>
-                            )}
-                            {tension && <div className="text-[10px] bg-blue-50 text-blue-700 border border-blue-100 px-2 py-0.5 rounded-md inline-block">↔ {tension.label}</div>}
-                          </div>
-                          <div className="border-t border-gray-100 grid grid-cols-3 bg-gray-50 text-center text-[11px] divide-x divide-gray-100">
-                            <div className="py-2">
-                              <div className="text-[9px] text-gray-400 font-bold uppercase">Gjeld</div>
-                              <div className={`font-bold mt-0.5 ${nd>0?'text-red-600':nd<0?'text-green-600':'text-gray-600'}`}>{nd>0?"+":""}{nd}</div>
-                            </div>
-                            <div className="py-2">
-                              <div className="text-[9px] text-gray-400 font-bold uppercase">xV-Eff.</div>
-                              <div className={`font-bold mt-0.5 ${d.eff>=1?'text-green-600':d.eff!=null?'text-red-600':'text-gray-400'}`}>{d.eff!=null?d.eff.toFixed(1)+"x":"–"}</div>
-                            </div>
-                            <div className="py-2">
-                              <div className="text-[9px] text-gray-400 font-bold uppercase">Frigjort</div>
-                              <div className="font-bold mt-0.5 text-gray-700">{capKr>0?"kr "+fmt(capKr):"–"}</div>
-                            </div>
-                          </div>
                         </div>
-                      );
-                    })}
-                  </div>
-                )}
-              </div>
-            </div>
-          );
-        }
-
-        // ─── STEP 0 (BESKRIV) ─────────────────────────────────────────────────────────
-        function Step0({ data, onChange }) {
-          const cfg = TYPE_CONFIG[data.type] || TYPE_CONFIG.tech;
-          return (
-            <div className="space-y-5">
-              <div>
-                <h3 className="text-xs font-bold text-gray-400 uppercase tracking-wider mb-2">Steg 1 · Kategoriser og beskriv valget</h3>
-                <div className="grid grid-cols-2 md:grid-cols-4 gap-2.5">
-                  {Object.entries(TYPE_CONFIG).map(([k,v]) => (
-                    <button key={k} type="button" onClick={()=>onChange({type:k})} className={`p-3 text-left border rounded-xl transition-all ${data.type===k?'border-green-600 bg-green-50/40 shadow-sm':'border-gray-200 bg-white hover:border-gray-300'}`}>
-                      <div className="text-lg mb-1.5">{v.emoji}</div>
-                      <div className="text-xs font-bold text-gray-800">{v.label}</div>
-                    </button>
-                  ))}
-                </div>
-              </div>
-
-              <div className="bg-white border border-gray-200 rounded-xl p-5 space-y-4 shadow-sm">
-                <div>
-                  {lbl("Navn på valget")}
-                  <input type="text" className="w-full border border-gray-300 rounded-lg p-2 text-xs outline-none focus:border-green-600" placeholder={cfg.whatPh} value={data.name} onChange={e=>onChange({name:e.target.value})} />
-                </div>
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                  <div className="md:col-span-2">
-                    {lbl(cfg.whatLabel, cfg.whatHint)}
-                    <textarea className="w-full border border-gray-300 rounded-lg p-2 text-xs h-20 resize-none outline-none focus:border-green-600" placeholder="Utdyp beskrivelsen her..." value={data.what||""} onChange={e=>onChange({what:e.target.value})} />
-                  </div>
-                  <div className="space-y-3">
-                    <div>
-                      {lbl("Fase")}
-                      <select className="w-full border border-gray-300 rounded-lg p-2 text-xs bg-white" value={data.phase} onChange={e=>onChange({phase:e.target.value})}>
-                        {PHASES.map(p=><option key={p} value={p}>{p}</option>)}
-                      </select>
                     </div>
-                    <div>
-                      {lbl("Primær effekt")}
-                      <select className="w-full border border-gray-300 rounded-lg p-2 text-xs bg-white" value={data.effect||""} onChange={e=>onChange({effect:e.target.value})}>
-                        <option value="">Velg effekt…</option>
-                        {cfg.effects.map(e=><option key={e} value={e}>{e}</option>)}
-                      </select>
+                `;
+            } else if (currentStep === 1) {
+                const totalDebt = Object.values(wizardData.debts).reduce((a,b)=>a+b,0);
+                stepContent = `
+                    <div class="space-y-4">
+                        <div class="flex justify-between items-center">
+                            <h3 class="text-xs font-bold text-gray-400 uppercase tracking-wider">Steg 2 · Gjeldsmåling (Konsensus i plenum)</h3>
+                            <span class="text-xs font-bold px-3 py-1 rounded-full ${totalDebt<0?'bg-green-50 text-green-700 border border-green-200':totalDebt>0?'bg-red-50 text-red-700 border border-red-200':'bg-gray-100 text-gray-600'}">Netto: ${totalDebt>0?"+":""}${totalDebt}</span>
+                        </div>
+                        <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
+                            ${DEBT_CATEGORIES.map(cat => {
+                                const val = wizardData.debts[cat.key] || 0;
+                                return `
+                                    <div class="border rounded-xl p-4 bg-white shadow-sm ${val<0?'border-green-200 bg-green-50/10':val>0?'border-red-200 bg-red-50/10':'border-gray-200'}">
+                                        <div class="flex justify-between items-start mb-1">
+                                            <span class="text-xs font-bold text-gray-800">${cat.name}</span>
+                                            <span class="text-xs font-black ${val<0?'text-green-600':val>0?'text-red-600':'text-gray-400'}">${val>0?"+":""}${val}</span>
+                                        </div>
+                                        <p class="text-[11px] text-gray-400 leading-normal mb-3">${cat.desc}</p>
+                                        <input type="range" min="-5" max="5" step="1" value="${val}" oninput="wizardData.debts['${cat.key}']=parseInt(this.value); render();" class="w-full">
+                                        <div class="flex justify-between text-[9px] font-bold text-gray-300 uppercase tracking-wider mt-1"><span>← Amortisering</span><span>Lån →</span></div>
+                                    </div>
+                                `;
+                            }).join('')}
+                        </div>
                     </div>
-                  </div>
-                </div>
-                <div>
-                  {lbl(cfg.optLabel)}
-                  <input type="text" className="w-full border border-gray-300 rounded-lg p-2 text-xs outline-none focus:border-green-600" placeholder={cfg.optPh} value={data.replaces||""} onChange={e=>onChange({replaces:e.target.value})} />
-                </div>
-                <div>
-                  {lbl("Paradoksal spenning (valgfritt)", "Fra ambideksterirammeverket")}
-                  <select className="w-full border border-gray-300 rounded-lg p-2 text-xs bg-white" value={data.tension||""} onChange={e=>onChange({tension:e.target.value})}>
-                    <option value="">Velg spenning…</option>
-                    {TENSIONS.map(t=><option key={t.key} value={t.key}>{t.label} — {t.desc}</option>)}
-                  </select>
-                </div>
-                <div className="bg-gray-50 rounded-lg p-4 border border-gray-100">
-                  {lbl("Strategisk orientering", cfg.orientHint)}
-                  <div className="flex justify-between text-[11px] font-medium text-gray-400 mb-1.5 mt-1">
-                    <span className={data.orient<45?'text-green-700 font-bold':''}>← Exploitasjon (Drift & effektivitet)</span>
-                    <span className={data.orient>55?'text-blue-700 font-bold':''}>Explorasjon (Innovasjon) →</span>
-                  </div>
-                  <input type="range" min="0" max="100" step="10" value={data.orient} onChange={e=>onChange({orient:parseInt(e.target.value)})} className="w-full accent-[#0D7A56]" />
-                </div>
-              </div>
-            </div>
-          );
-        }
+                `;
+            } else if (currentStep === 2) {
+                const cost = parseFloat(wizardData.cost) || 0;
+                const hours = parseFloat(wizardData.hours) || 0;
+                const rate = parseFloat(wizardData.hourRate) || 1100;
+                const horizons = parseFloat(wizardData.horizons) || 8;
+                const rawValue = hours * rate * horizons;
+                const xv = rawValue * wizardData.prob * wizardData.absorb;
+                const eff = cost > 0 ? xv / cost : null;
 
-        // ─── STEP 1 (GJELDSMÅLING) ────────────────────────────────────────────────────
-        function Step1({ data, onChange }) {
-          const handleDebt = (k, v) => onChange({ debts: { ...data.debts, [k]: parseInt(v) } });
-          const total = Object.values(data.debts).reduce((a,b)=>a+b,0);
-          return (
-            <div className="space-y-4">
-              <div className="flex justify-between items-center">
-                <h3 className="text-xs font-bold text-gray-400 uppercase tracking-wider">Steg 2 · Gjeldsmåling (Konsensus i plenum)</h3>
-                <span className={`text-xs font-bold px-3 py-1 rounded-full ${total<0?'bg-green-50 text-green-700 border border-green-200':total>0?'bg-red-50 text-red-700 border border-red-200':'bg-gray-100 text-gray-600'}`}>Netto: {total>0?"+":""}{total}</span>
-              </div>
-              <div className="bg-amber-50 border border-amber-200 text-amber-800 p-3 rounded-lg text-xs flex gap-2">
-                <Info size={14} className="mt-0.5 flex-shrink-0"/>
-                <span>Dra til <strong>venstre</strong> om valget reduserer eksisterende gjeld (amortisering), og til <strong>høyre</strong> om det øker belastningen (nytt lån).</span>
-              </div>
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                {DEBT_CATEGORIES.map(cat => {
-                  const val = data.debts[cat.key] || 0;
-                  return (
-                    <div key={cat.key} className={`border rounded-xl p-4 bg-white shadow-sm transition-all ${val<0?'border-green-200 bg-green-50/10':val>0?'border-red-200 bg-red-50/10':'border-gray-200'}`}>
-                      <div className="flex justify-between items-start mb-1">
-                        <span className="text-xs font-bold text-gray-800">{cat.name}</span>
-                        <span className={`text-xs font-black ${val<0?'text-green-600':val>0?'text-red-600':'text-gray-400'}`}>{val>0?"+":""}{val}</span>
-                      </div>
-                      <p className="text-[11px] text-gray-400 leading-normal mb-3">{cat.desc}</p>
-                      <input type="range" min="-5" max="5" step="1" value={val} onChange={e=>handleDebt(cat.key,e.target.value)} className="w-full accent-[#0D7A56]" />
-                      <div className="flex justify-between text-[9px] font-bold text-gray-300 uppercase tracking-wider mt-1">
-                        <span>← Amortisering</span><span>Lån →</span>
-                      </div>
-                      <div className="text-[11px] text-gray-500 italic border-t border-gray-100 pt-2 mt-2">💬 {cat.q}</div>
+                stepContent = `
+                    <div class="space-y-4">
+                        <h3 class="text-xs font-bold text-gray-400 uppercase tracking-wider">Steg 3 · xV-analyse (Gevinstrealisering)</h3>
+                        <div class="grid grid-cols-1 md:grid-cols-4 gap-3">
+                            <div>
+                                <label class="text-xs font-bold text-gray-500 block mb-1">Implementeringskostnad (kr)</label>
+                                <input type="number" oninput="wizardData.cost=this.value; render();" class="w-full border border-gray-300 rounded-lg p-2 text-xs outline-none focus:border-green-600" value="${wizardData.cost}" placeholder="500000">
+                            </div>
+                            <div>
+                                <label class="text-xs font-bold text-gray-500 block mb-1">Frigjort tid (t/kvartal)</label>
+                                <input type="number" oninput="wizardData.hours=this.value; render();" class="w-full border border-gray-300 rounded-lg p-2 text-xs outline-none focus:border-green-600" value="${wizardData.hours}" placeholder="160">
+                            </div>
+                            <div>
+                                <label class="text-xs font-bold text-gray-500 block mb-1">Timekostnad (kr/t)</label>
+                                <input type="number" oninput="wizardData.hourRate=this.value; render();" class="w-full border border-gray-300 rounded-lg p-2 text-xs outline-none focus:border-green-600" value="${wizardData.hourRate}">
+                            </div>
+                            <div>
+                                <label class="text-xs font-bold text-gray-500 block mb-1">Tidshorisont (kvartaler)</label>
+                                <input type="number" oninput="wizardData.horizons=this.value; render();" class="w-full border border-gray-300 rounded-lg p-2 text-xs outline-none focus:border-green-600" value="${wizardData.horizons}">
+                            </div>
+                        </div>
+
+                        <div class="bg-white border border-gray-200 rounded-xl p-5 shadow-sm space-y-4">
+                            <label class="text-xs font-bold text-gray-500 uppercase tracking-wider block">Strategiske diskonteringsfaktorer</label>
+                            <div>
+                                <div class="flex justify-between text-xs text-gray-700 mb-1"><span>Sannsynlighet for full gevinst</span><b>${Math.round(wizardData.prob*100)}%</b></div>
+                                <input type="range" min="0.1" max="1" step="0.05" value="${wizardData.prob}" oninput="wizardData.prob=parseFloat(this.value); render();" class="w-full">
+                            </div>
+                            <div>
+                                <div class="flex justify-between text-xs text-gray-700 mb-1"><span>Organisatorisk absorbsjonsevne</span><b>${Math.round(wizardData.absorb*100)}%</b></div>
+                                <input type="range" min="0.1" max="1" step="0.05" value="${wizardData.absorb}" oninput="wizardData.absorb=parseFloat(this.value); render();" class="w-full">
+                            </div>
+                        </div>
+
+                        <div class="grid grid-cols-1 md:grid-cols-3 gap-3 text-center">
+                            <div class="bg-white p-4 border border-gray-200 rounded-xl shadow-sm">
+                                <div class="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Ukorrigert Gevinst</div>
+                                <div class="text-lg font-bold text-gray-700 mt-1">${rawValue>0?"kr "+fmt(rawValue):"–"}</div>
+                            </div>
+                            <div class="bg-green-50/50 p-4 border border-green-200 rounded-xl shadow-sm">
+                                <div class="text-[10px] font-bold text-gray-500 uppercase tracking-wider">Forventet Verdi (xV)</div>
+                                <div class="text-lg font-bold text-green-700 mt-1">${xv>0?"kr "+fmt(xv):"–"}</div>
+                            </div>
+                            <div class="p-4 border rounded-xl shadow-sm ${eff>=1?'bg-green-50 border-green-200 text-green-700':'bg-white text-gray-700'}">
+                                <div class="text-[10px] font-bold text-gray-400 uppercase tracking-wider">xV-Effektivitet</div>
+                                <div class="text-lg font-bold mt-1 ${eff && eff<1?'text-red-600':''}">${eff!=null?eff.toFixed(2)+"x":"–"}</div>
+                            </div>
+                        </div>
                     </div>
-                  );
-                })}
-              </div>
-            </div>
-          );
-        }
-
-        // ─── STEP 2 (XV ANALYSE) ──────────────────────────────────────────────────────
-        function Step2({ data, onChange }) {
-          const cost=parseFloat(data.cost)||0, hours=parseFloat(data.hours)||0;
-          const rate=parseFloat(data.hourRate)||1100, horizons=parseFloat(data.horizons)||8;
-          const prob=data.prob||0.7, absorb=data.absorb||0.6;
-          const rawValue=hours*rate*horizons, xv=rawValue*prob*absorb, eff=cost>0?xv/cost:null;
-
-          return (
-            <div className="space-y-4">
-              <h3 className="text-xs font-bold text-gray-400 uppercase tracking-wider">Steg 3 · xV-analyse</h3>
-              <div className="grid grid-cols-1 md:grid-cols-4 gap-3">
-                {[
-                  {l:"Implementeringskostnad (kr)", k:"cost", ph:"500 000"},
-                  {l:"Frigjort tid (timer/kvartal)", k:"hours", ph:"160"},
-                  {l:"Intern timekostnad (kr/t)", k:"hourRate", ph:"1 100"},
-                  {l:"Tidshorisont (kvartaler)", k:"horizons", ph:"8"},
-                ].map(f=>(
-                  <div key={f.k} className="bg-white p-4 border border-gray-200 rounded-xl shadow-sm">
-                    {lbl(f.l)}
-                    <input type="number" className="w-full border border-gray-300 rounded-lg p-2 text-xs outline-none focus:border-green-600 mt-1" placeholder={f.ph} value={data[f.k]||""} onChange={e=>onChange({[f.k]:e.target.value})} />
-                  </div>
-                ))}
-              </div>
-
-              <div className="bg-white border border-gray-200 rounded-xl p-5 shadow-sm space-y-4">
-                {lbl("Strategiske diskonteringsfaktorer", "Justering for risiko og organisatorisk motstand")}
-                {[
-                  {l:"Sannsynlighet for full gevinstrealisering", k:"prob", v:prob},
-                  {l:"Organisatorisk absorbsjonsevne", k:"absorb", v:absorb},
-                ].map(s=>(
-                  <div key={s.k}>
-                    <div className="flex justify-between items-center mb-1">
-                      <span className="text-xs font-semibold text-gray-700">{s.l}</span>
-                      <span className="text-xs font-bold text-gray-800">{Math.round(s.v*100)}%</span>
+                `;
+            } else if (currentStep === 3) {
+                const nd = Object.values(wizardData.debts).reduce((a,b)=>a+b,0);
+                stepContent = `
+                    <div class="space-y-4">
+                        <h3 class="text-xs font-bold text-gray-400 uppercase tracking-wider">Steg 4 · Workshop Beslutningsgrunnlag</h3>
+                        <div class="bg-white border border-gray-200 rounded-xl p-5 shadow-sm space-y-4">
+                            <div class="flex justify-between items-start border-b border-gray-100 pb-4">
+                                <div>
+                                    <h2 class="text-xl font-bold text-gray-900">${wizardData.name || "Navnløst valg"}</h2>
+                                    <p class="text-xs text-gray-500 mt-1">${wizardData.what || "Ingen beskrivelse lagt til."}</p>
+                                </div>
+                                <div class="p-3 rounded-lg border text-center min-w-[90px] ${nd<0?'bg-green-50 border-green-200 text-green-700':'bg-red-50 border-red-200 text-red-700'}">
+                                    <div class="text-[9px] font-bold uppercase opacity-60">Netto Gjeld</div>
+                                    <div class="text-xl font-black mt-0.5">${nd>0?"+":""}${nd}</div>
+                                </div>
+                            </div>
+                            <div class="p-4 rounded-lg text-xs ${nd<=0?'bg-green-50 text-green-800 border border-green-200':'bg-amber-50 text-amber-800 border border-amber-200'}">
+                                ${nd<=0 ? '<b>Strategisk anbefalt:</b> Valget medfører enten gjeldsreduksjon eller er gjeldsnøytralt.' : '<b>Vennligst merk:</b> Dette valget øker den digitale gjelden. Sørg for at teamet har en plan for tilbakebetaling.'}
+                            </div>
+                        </div>
                     </div>
-                    <input type="range" min="10" max="100" step="5" value={Math.round(s.v*100)} onChange={e=>onChange({[s.k]:parseInt(e.target.value)/100})} className="w-full accent-[#0D7A56]" />
-                  </div>
-                ))}
-              </div>
+                `;
+            }
 
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-3 text-center">
-                <div className="bg-white p-4 border border-gray-200 rounded-xl shadow-sm">
-                  <div className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Ukorrigert Gevinst</div>
-                  <div className="text-lg font-bold text-gray-700 mt-1">{rawValue>0?"kr "+fmt(rawValue):"–"}</div>
-                </div>
-                <div className="bg-green-50/50 p-4 border border-green-200 rounded-xl shadow-sm">
-                  <div className="text-[10px] font-bold text-gray-500 uppercase tracking-wider">Forventet Verdi (xV)</div>
-                  <div className="text-lg font-bold text-green-700 mt-1">{xv>0?"kr "+fmt(xv):"–"}</div>
-                </div>
-                <div className={`p-4 border rounded-xl shadow-sm ${eff>=1?'bg-green-50 border-green-200 text-green-700':'bg-white text-gray-700'}`}>
-                  <div className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">xV-Effektivitet</div>
-                  <div className={`text-lg font-bold mt-1 ${eff<1?'text-red-600':''}`}>{eff!=null?eff.toFixed(2)+"x":"–"}</div>
-                </div>
-              </div>
-            </div>
-          );
-        }
-
-        // ─── STEP 3 (OPPSUMMERING) ────────────────────────────────────────────────────
-        function Step3({ data }) {
-          const nd=Object.values(data.debts).reduce((a,b)=>a+b,0);
-          const sig=DEBT_CATEGORIES.filter(c=>(data.debts[c.key]||0)!==0);
-          return (
-            <div className="space-y-4">
-              <h3 className="text-xs font-bold text-gray-400 uppercase tracking-wider">Steg 4 · Workshop Beslutningsgrunnlag</h3>
-              <div className="bg-white border border-gray-200 rounded-xl p-5 shadow-sm space-y-4">
-                <div className="flex justify-between items-start border-b border-gray-100 pb-4">
-                  <div>
-                    <div className="flex gap-2 items-center mb-1.5"><TypeBadge type={data.type}/><span className="text-xs text-gray-400">{data.phase}</span></div>
-                    <h2 className="text-xl font-bold text-gray-900">{data.name||"Navnløst valg"}</h2>
-                    {data.what && <p className="text-xs text-gray-500 mt-1 leading-relaxed">{data.what}</p>}
-                  </div>
-                  <div className={`p-3 rounded-lg border text-center min-w-[90px] ${nd<0?'bg-green-50 border-green-200 text-green-700':'bg-red-50 border-red-200 text-red-700'}`}>
-                    <div className="text-[9px] font-bold uppercase tracking-wider opacity-60">Netto Gjeld</div>
-                    <div className="text-xl font-black mt-0.5">{nd>0?"+":""}{nd}</div>
-                  </div>
-                </div>
-
-                {sig.length > 0 && (
-                  <div className="space-y-2 text-xs">
-                    <div className="font-bold text-gray-400 text-[10px] uppercase">Gjeldspåvirkning:</div>
-                    {sig.map(c => (
-                      <div key={c.key} className="flex justify-between items-center bg-gray-50 px-3 py-1.5 rounded-lg border border-gray-100">
-                        <span className="font-medium text-gray-700">{c.name}</span>
-                        <span className={`font-bold ${data.debts[c.key]<0?'text-green-600':'text-red-600'}`}>{data.debts[c.key]>0?"+":""}{data.debts[c.key]} ({data.debts[c.key]<0?'Amortisering':'Lån'})</span>
-                      </div>
-                    ))}
-                  </div>
-                )}
-                {nd <= 0 ? (
-                  <Tip color="green" content="Strategisk anbefalt: Valget medfører enten gjeldsreduksjon eller er gjeldsnøytralt, noe som styrker plattformens langsiktige endringsevne."/>
-                ) : (
-                  <Tip color="amber" content="Vennligst merk: This valget øker den digitale gjelden. Sørg for at teamet har lagt en plan for når og hvordan dette lånet skal betales tilbake."/>
-                )}
-              </div>
-            </div>
-          );
-        }
-
-        // ─── WIZARD CONTAINER ────────────────────────────────────────────────────────
-        function Wizard({ onSave, onCancel }) {
-          const [step, setStep] = useState(0);
-          const [data, setData] = useState({ name:"", type:"tech", phase:"Assimilering", what:"", effect:"", replaces:"", tension:"", orient:50, context:"", debts:emptyDebts(), cost:"", hours:"", hourRate:1100, horizons:8, prob:0.7, absorb:0.6 });
-          const update = p => setData(prev=>({...prev,...p}));
-
-          const handleSave = () => {
-            const cost=parseFloat(data.cost)||0, hours=parseFloat(data.hours)||0;
-            const rate=parseFloat(data.hourRate)||1100, horizons=parseFloat(data.horizons)||8;
-            const xv=hours*rate*horizons*(data.prob||0.7)*(data.absorb||0.6);
-            const eff=cost>0?xv/cost:null;
-            onSave({...data, cost, hours, hourRate:rate, horizons, xv, eff, id:Date.now()});
-          };
-
-          return (
-            <div className="space-y-6">
-              <div className="flex justify-between items-center bg-white border border-gray-200 rounded-xl p-3 shadow-sm">
-                <button type="button" onClick={onCancel} className="text-xs font-semibold text-gray-500 hover:text-gray-700 px-3 py-1.5 border border-gray-200 rounded-lg flex items-center gap-1 bg-white shadow-sm">
-                  <ArrowLeft size={13}/> Avbryt
-                </button>
-                <div className="flex items-center gap-1.5 text-xs font-bold text-gray-400">
-                  {["Beskriv","Gjeld","xV-Analyse","Konklusjon"].map((s,i)=>(
-                    <div key={i} className="flex items-center gap-1.5">
-                      <span className={`w-5 h-5 rounded-full flex items-center justify-center text-[10px] ${i===step?'bg-[#0D7A56] text-white':'bg-gray-100 text-gray-400'}`}>{i+1}</span>
-                      <span className={i===step?'text-gray-800':''}>{s}</span>
-                      {i<3&&<span className="text-gray-200">/</span>}
+            let footer = `
                     </div>
-                  ))}
+                    <div class="flex justify-between border-t border-gray-200 pt-4 mt-6">
+                        <button onclick="if(currentStep>0){currentStep--; render();}else{view='dashboard'; render();}" class="text-xs font-semibold border border-gray-300 rounded-lg px-4 py-2 bg-white text-gray-600">⬅ ${currentStep===0?'Avbryt':'Forrige'}</button>
+                        ${currentStep < 3 
+                            ? `<button onclick="currentStep++; render();" ${currentStep===0 && !wizardData.name.trim() ? 'disabled class="opacity-40 text-xs font-semibold bg-[#0D7A56] text-white rounded-lg px-5 py-2"' : 'class="text-xs font-semibold bg-[#0D7A56] hover:bg-[#0a5e42] text-white rounded-lg px-5 py-2"'} >Neste ➡</button>`
+                            : `<button onclick="saveWizardDecision();" class="text-xs font-bold bg-[#0D7A56] hover:bg-[#0a5e42] text-white rounded-lg px-6 py-2">✓ Lagre valg til sesjon</button>`
+                        }
+                    </div>
                 </div>
-              </div>
+            `;
 
-              <div>
-                {step===0&&<Step0 data={data} onChange={update}/>}
-                {step===1&&<Step1 data={data} onChange={update}/>}
-                {step===2&&<Step2 data={data} onChange={update}/>}
-                {step===3&&<Step3 data={data}/>}
-              </div>
-
-              <div className="flex justify-between border-t border-gray-200 pt-4">
-                <button type="button" onClick={()=>step>0?setStep(s=>s-1):onCancel()} className="text-xs font-semibold border border-gray-300 rounded-lg px-4 py-2 bg-white text-gray-600 flex items-center gap-1">
-                  <ArrowLeft size={12}/> {step===0?'Gå tilbake':'Forrige'}
-                </button>
-                {step<3 ? (
-                  <button type="button" onClick={()=>setStep(s=>s+1)} disabled={step===0&&!data.name.trim()} className="text-xs font-semibold bg-[#0D7A56] hover:bg-[#0a5e42] text-white rounded-lg px-5 py-2 flex items-center gap-1 shadow-sm disabled:opacity-40 transition-colors">
-                    Neste <ArrowRight size={12}/>
-                  </button>
-                ) : (
-                  <button type="button" onClick={handleSave} className="text-xs font-bold bg-[#0D7A56] hover:bg-[#0a5e42] text-white rounded-lg px-6 py-2 flex items-center gap-1 shadow-sm transition-colors">
-                    <Check size={12}/> Lagre valg til sesjon
-                  </button>
-                )}
-              </div>
-            </div>
-          );
+            target.innerHTML = stepsHeader + stepContent + footer;
         }
 
-        // ─── APP ROOT ────────────────────────────────────────────────────────────────
-        function App() {
-          const [view, setView] = useState("dashboard");
-          const [decisions, setDecisions] = useState(() => {
-            const saved = localStorage.getItem("platform_decisions");
-            return saved ? JSON.parse(saved) : [];
-          });
+        function saveWizardDecision() {
+            const cost = parseFloat(wizardData.cost) || 0;
+            const hours = parseFloat(wizardData.hours) || 0;
+            const rate = parseFloat(wizardData.hourRate) || 1100;
+            const horizons = parseFloat(wizardData.horizons) || 8;
+            const xv = hours * rate * horizons * wizardData.prob * wizardData.absorb;
+            const eff = cost > 0 ? xv / cost : null;
 
-          const handleSave = (dec) => {
-            setDecisions(prev => {
-              const updated = [...prev, dec];
-              localStorage.setItem("platform_decisions", JSON.stringify(updated));
-              return updated;
-            });
-            setView("dashboard");
-          };
-
-          const handleDelete = (id) => {
-            setDecisions(prev => {
-              const updated = prev.filter(d => d.id !== id);
-              localStorage.setItem("platform_decisions", JSON.stringify(updated));
-              return updated;
-            });
-          };
-
-          return (
-            <div className="min-h-screen flex flex-col">
-              <header className="bg-white border-b border-gray-200 px-6 py-3.5 flex justify-between items-center sticky top-0 z-10 shadow-sm">
-                <div className="flex items-center gap-2.5">
-                  <div className="w-7 h-7 rounded-lg bg-[#0D7A56] flex items-center justify-center text-white font-black text-sm shadow-sm">P</div>
-                  <div>
-                    <span className="font-bold text-gray-800 text-sm tracking-tight block">Platform Decision Tool</span>
-                    <span className="text-[10px] text-gray-400 font-medium block -mt-0.5">Sopra Steria Transformation</span>
-                  </div>
-                </div>
-                <div className="text-[11px] font-bold text-gray-400 bg-gray-50 border border-gray-100 rounded-full px-3 py-1">
-                  {decisions.length} aktive valg i nettleseren
-                </div>
-              </header>
-              <main className="max-w-5xl w-full mx-auto px-6 py-8 flex-1">
-                {view === "dashboard"
-                  ? <Dashboard decisions={decisions} onNew={()=>setView("wizard")} onDelete={handleDelete} />
-                  : <Wizard onSave={handleSave} onCancel={()=>setView("dashboard")} />
-                }
-              </main>
-            </div>
-          );
+            const finalDecision = { ...wizardData, cost, hours, hourRate: rate, horizons, xv, eff, id: Date.now() };
+            decisions.push(finalDecision);
+            saveToStorage();
+            view = "dashboard";
+            render();
         }
 
-        const root = ReactDOM.createRoot(document.getElementById('root'));
-        root.render(<App />);
+        function deleteDecision(id) {
+            decisions = decisions.filter(d => d.id !== id);
+            saveToStorage();
+            render();
+        }
+
+        // START APPLIKASJONEN
+        render();
     </script>
 </body>
 </html>
