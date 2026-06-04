@@ -1,0 +1,236 @@
+<!DOCTYPE html>
+<html lang="no">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Platform Decision Tool</title>
+    <script src="https://unpkg.com/react@18/umd/react.production.min.js" crossorigin></script>
+    <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js" crossorigin></script>
+    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/lucide@0.400.0/dist/umd/lucide.min.js"></script>
+    <script src="https://unpkg.com/prop-types/prop-types.min.js"></script>
+    <script src="https://unpkg.com/recharts/umd/Recharts.js"></script>
+    <script src="https://cdn.tailwindcss.com"></script>
+</head>
+<body class="bg-[#F5F4F0] text-[#1C1B18] antialiased">
+
+    <div id="root"></div>
+
+    <script type="text/babel">
+        // Vi henter ut komponentene vi trenger fra pakkene vi lastet inn i head
+        const { useState, useEffect } = React;
+        const { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Cell } = Recharts;
+        const { Plus, ArrowLeft, ArrowRight, Check, Trash2, ChevronRight, AlertTriangle, Info, CheckCircle, Layers } = lucide;
+
+        // Her limer vi inn de samme konstantene du hadde i koden din
+        const DEBT_CATEGORIES = [
+          { key:"ideology",    name:"Ideologi",         short:"Ideologi",    desc:"Teknologibias og leverandørpreferanser som skaper sub-optimale path-dependencies", q:"Er valget drevet av teknisk modenhet, eller av interne preferanser for kjente leverandører?" },
+          { key:"competence",  name:"Kompetanse",        short:"Kompetanse",  desc:"Intern vs. ekstern kompetanse, opplæringsbehov og kognitiv belastning (Team Topologies)", q:"Frigjør eller krever valget intern spesialistkompetanse? Øker det teamets kognitive belastning?" },
+          { key:"working_env", name:"Arbeidsmiljø",      short:"Arbeidsmiljø",desc:"Kultur, DevEx og organisatorisk absorbsjonsevne", q:"Forbedrer valget utvikleropplevelsen (DevEx)? Reduserer det friksjon i hverdagen?" },
+          { key:"user_sat",    name:"Brukertilfredshet", short:"Brukertilf.", desc:"Sluttbrukernes opplevelse av IT-leveransen", q:"Påvirker valget sluttbrukernes arbeidsflyt positivt eller negativt?" },
+          { key:"reputation",  name:"Omdømme",           short:"Omdømme",     desc:"Intern tillit til IT-funksjonen og leveranseevne over tid", q:"Styrker valget tilliten til plattformteamet, eller skaper det ny skepsis?" },
+          { key:"infra",       name:"Infrastruktur",     short:"Infra",       desc:"Driftsintensitet, IaC-gjeld, lock-in og fremtidig endringsevne", q:"Reduserer valget driftsoverhead? Skaper det ny vendor lock-in?" },
+          { key:"shadow_it",   name:"Shadow IT",         short:"Shadow IT",   desc:"Desentraliserte investeringer og workarounds utenfor plattformens kontroll", q:"Reduserer valget behovet for workarounds, eller driver det nye desentraliserte løsninger?" },
+          { key:"technical",   name:"Teknisk gjeld",     short:"Teknisk",     desc:"Dokumentasjon, automatisering, IaC-drift og vedlikeholdskostnader", q:"Er løsningen kodifisert i IaC? Reduserer den fremtidig vedlikeholdskostnad?" },
+          { key:"governance",  name:"Governance",        short:"Governance",  desc:"Beslutningsstrukturer, compliance-overhead og kontrollmekanismer", q:"Forenkler valget godkjenningsprosesser, eller legger det til nye kontrollkrav?" },
+        ];
+
+        const TENSIONS = [
+          { key:"alignment", label:"Alignment",   desc:"Forretningstransformasjon ↔ Medarbeidertransformasjon" },
+          { key:"change",    label:"Endring",      desc:"Radikal innovasjon ↔ Inkrementell innovasjon" },
+          { key:"knowledge", label:"Kunnskap",     desc:"Anskaffe ny kompetanse ↔ Vedlikeholde eksisterende" },
+          { key:"delivery",  label:"Leveranse",    desc:"Ny infrastruktur ↔ Legacy-miljø" },
+          { key:"sourcing",  label:"Sourcing",     desc:"Ekstern anskaffelse ↔ Intern utvikling" },
+          { key:"risk",      label:"Risiko",       desc:"Innovasjon og eksperimentering ↔ Compliance og kontroll" },
+          { key:"objective", label:"Målsetting",   desc:"Ny digital kapabilitet ↔ Digital infrastruktur" },
+          { key:"value",     label:"Verdiskaping", desc:"Kundeverdi ↔ Aksjonærverdi" },
+          { key:"agenda",    label:"Agenda",       desc:"Digital transformasjon ↔ Digitalisering" },
+        ];
+
+        // --- DASHBOARD KOMPONENT ---
+        function Dashboard({ decisions, onNew, onDelete }) {
+          const totalDebt = decisions.reduce((s,d) => s + Object.values(d.debts).reduce((a,b)=>a+b,0), 0);
+          const totalCap  = decisions.reduce((s,d) => s + (d.hours||0)*(d.horizons||1), 0);
+          const totalXV   = decisions.reduce((s,d) => s + (d.xv||0), 0);
+          const totalCost = decisions.reduce((s,d) => s + (d.cost||0), 0);
+          const freedKr   = decisions.reduce((s,d) => s + (d.hours||0)*(d.hourRate||1100)*(d.horizons||1), 0);
+          const xvEff     = totalCost > 0 ? totalXV/totalCost : null;
+
+          const catTotals = {};
+          DEBT_CATEGORIES.forEach(c => { catTotals[c.key]=0 });
+          decisions.forEach(d => DEBT_CATEGORIES.forEach(c => { catTotals[c.key] += d.debts[c.key]||0 }));
+          const chartData = DEBT_CATEGORIES.map(c => ({ name:c.short, value:catTotals[c.key] }));
+
+          return (
+            <div className="space-y-6">
+              <div className="flex justify-between items-start">
+                <div>
+                  <h1 className="text-3xl font-bold tracking-tight">Platform Decision Tool</h1>
+                  <p className="text-gray-500 mt-2">Mål digital gjeld og forventet verdi (xV) for plattformvalg.</p>
+                </div>
+                <button onClick={onNew} className="bg-[#0D7A56] text-white px-4 py-2 rounded-lg font-semibold flex items-center gap-2 shadow-sm hover:bg-[#0a5e42]">
+                  <Plus size={16}/> Nytt valg
+                </button>
+              </div>
+
+              {/* KPI-kort */}
+              <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+                <div className="bg-white p-5 rounded-xl border border-gray-200 shadow-sm">
+                  <div className="text-xs font-bold text-gray-400 uppercase tracking-wider">Netto Gjeldseffekt</div>
+                  <div className={`text-2xl font-bold mt-2 ${totalDebt > 0 ? 'text-red-600' : totalDebt < 0 ? 'text-green-600' : 'text-gray-700'}`}>
+                    {totalDebt > 0 ? `+${totalDebt}` : totalDebt}
+                  </div>
+                </div>
+                <div className="bg-white p-5 rounded-xl border border-gray-200 shadow-sm">
+                  <div className="text-xs font-bold text-gray-400 uppercase tracking-wider">Frigjort Verdi</div>
+                  <div className="text-2xl font-bold text-green-600 mt-2">kr {freedKr.toLocaleString('nb-NO')}</div>
+                </div>
+                <div className="bg-white p-5 rounded-xl border border-gray-200 shadow-sm">
+                  <div className="text-xs font-bold text-gray-400 uppercase tracking-wider">Forventet Verdi (xV)</div>
+                  <div className="text-2xl font-bold text-gray-700 mt-2">kr {totalXV.toLocaleString('nb-NO')}</div>
+                </div>
+                <div className="bg-white p-5 rounded-xl border border-gray-200 shadow-sm">
+                  <div className="text-xs font-bold text-gray-400 uppercase tracking-wider">Antall Valg</div>
+                  <div className="text-2xl font-bold text-gray-700 mt-2">{decisions.length}</div>
+                </div>
+              </div>
+
+              {/* Liste over valg */}
+              <div className="bg-white rounded-xl border border-gray-200 shadow-sm p-6">
+                <h3 className="text-lg font-semibold mb-4">Registrerte valg i denne sesjonen</h3>
+                {decisions.length === 0 ? (
+                  <p className="text-gray-400 text-sm italic">Ingen valg lagret ennå. Klikk på "Nytt valg" øverst.</p>
+                ) : (
+                  <div className="divide-y divide-gray-100">
+                    {decisions.map(d => (
+                      <div key={d.id} className="py-4 flex justify-between items-center">
+                        <div>
+                          <h4 className="font-bold text-gray-800">{d.name}</h4>
+                          <p className="text-xs text-gray-500 mt-1">{d.type} — {d.phase}</p>
+                        </div>
+                        <button onClick={() => onDelete(d.id)} className="text-gray-400 hover:text-red-500 p-1">
+                          <Trash2 size={16}/>
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            </div>
+          );
+        }
+
+        // --- ENKEL WIZARD FOR Å LEGGE TIL NYTT VALG ---
+        function Wizard({ onSave, onCancel }) {
+          const [name, setName] = useState("");
+          const [type, setType] = useState("tech");
+          const [phase, setPhase] = useState("Assimilering");
+          
+          // Setter opp standard tom gjeldsprofil
+          const [debts, setDebts] = useState({ ideology: 0, competence: 0, working_env: 0, user_sat: 0, reputation: 0, infra: 0, shadow_it: 0, technical: 0, governance: 0 });
+
+          const handleSave = () => {
+            if (!name) return alert("Valget må ha et navn!");
+            onSave({ id: Date.now(), name, type, phase, debts, cost: 0, hours: 0, hourRate: 1100, horizons: 8, xv: 0 });
+          };
+
+          return (
+            <div className="bg-white rounded-xl border border-gray-200 shadow-sm p-6 max-w-2xl mx-auto space-y-6">
+              <h2 className="text-xl font-bold">Legg til nytt arkitektur- eller teamvalg</h2>
+              
+              <div>
+                <label className="block text-xs font-bold uppercase tracking-wider text-gray-500 mb-2">Navn på valget</label>
+                <input type="text" className="w-full border border-gray-300 rounded-lg p-2 text-sm outline-none focus:border-green-600" placeholder="F.eks. Bytte ut Palo Alto med Azure Firewall" value={name} onChange={e=>setName(e.target.value)} />
+              </div>
+
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-xs font-bold uppercase tracking-wider text-gray-500 mb-2">Type beslutning</label>
+                  <select className="w-full border border-gray-300 rounded-lg p-2 text-sm" value={type} onChange={e=>setType(e.target.value)}>
+                    <option value="tech">Teknologivalg ⚙️</option>
+                    <option value="org">Organisasjonsvalg 🏗️</option>
+                    <option value="process">Prosessvalg 🔄</option>
+                    <option value="design">Designvalg 🧩</option>
+                  </select>
+                </div>
+                <div>
+                  <label className="block text-xs font-bold uppercase tracking-wider text-gray-500 mb-2">Endringsfase</label>
+                  <select className="w-full border border-gray-300 rounded-lg p-2 text-sm" value={phase} onChange={e=>setPhase(e.target.value)}>
+                    <option value="Assimilering">Assimilering</option>
+                    <option value="Rekonstruksjon">Rekonstruksjon</option>
+                    <option value="Materialisering">Materialisering</option>
+                  </select>
+                </div>
+              </div>
+
+              {/* Superenkel demonstrasjon av en av sliderne */}
+              <div className="border-t border-gray-100 pt-4">
+                <label className="block text-xs font-bold uppercase tracking-wider text-gray-500 mb-1">Gjeldseffekt: Teknisk gjeld (-5 til +5)</label>
+                <input type="range" min="-5" max="5" className="w-full accent-[#0D7A56]" value={debts.technical} onChange={e => setDebts({...debts, technical: parseInt(e.target.value)})} />
+                <div className="flex justify-between text-xs text-gray-400 mt-1">
+                  <span>← Reduserer gjeld</span>
+                  <span className="font-bold text-gray-700">{debts.technical > 0 ? `+${debts.technical}` : debts.technical}</span>
+                  <span>Øker gjeld →</span>
+                </div>
+              </div>
+
+              <div className="flex justify-between border-t border-gray-100 pt-4">
+                <button onClick={onCancel} className="border border-gray-300 text-gray-600 px-4 py-2 rounded-lg text-sm font-medium">Avbryt</button>
+                <button onClick={handleSave} className="bg-[#0D7A56] text-white px-5 py-2 rounded-lg text-sm font-semibold shadow-sm hover:bg-[#0a5e42]">Lagre og oppdater profil</button>
+              </div>
+            </div>
+          );
+        }
+
+        // --- HOVEDAPP MED LOCALSTORAGE ---
+        function App() {
+          const [view, setView] = useState("dashboard");
+          
+          // 1. Hent data fra nettleseren (localStorage)
+          const [decisions, setDecisions] = useState(() => {
+            const saved = localStorage.getItem("platform_decisions");
+            return saved ? JSON.parse(saved) : [];
+          });
+
+          // 2. Lagre til nettleseren hver gang listen oppdateres
+          const handleSave = (newDecision) => {
+            setDecisions(prev => {
+              const updated = [...prev, newDecision];
+              localStorage.setItem("platform_decisions", JSON.stringify(updated));
+              return updated;
+            });
+            setView("dashboard");
+          };
+
+          const handleDelete = (id) => {
+            setDecisions(prev => {
+              const updated = prev.filter(d => d.id !== id);
+              localStorage.setItem("platform_decisions", JSON.stringify(updated));
+              return updated;
+            });
+          };
+
+          return (
+            <div>
+              <header className="bg-white border-b border-gray-200 px-8 py-4 flex justify-between items-center sticky top-0 z-10">
+                <div className="flex items-center gap-3">
+                  <div className="w-8 h-8 rounded-lg bg-[#0D7A56] flex items-center justify-center text-white font-extrabold">P</div>
+                  <span className="font-bold text-gray-800">Platform Decision Tool</span>
+                </div>
+                <div className="text-xs text-gray-400">Sopra Steria Transformation</div>
+              </header>
+              <main className="max-w-5xl mx-auto px-6 py-10">
+                {view === "dashboard" 
+                  ? <Dashboard decisions={decisions} onNew={() => setView("wizard")} onDelete={handleDelete} />
+                  : <Wizard onSave={handleSave} onCancel={() => setView("dashboard")} />
+                }
+              </main>
+            </div>
+          );
+        }
+
+        const root = ReactDOM.createRoot(document.getElementById('root'));
+        root.render(<App />);
+    </script>
+</body>
+</html>
