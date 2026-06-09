@@ -1,835 +1,396 @@
-import { useState } from "react"
-import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Cell } from "recharts"
-import { Plus, ArrowLeft, ArrowRight, Check, Trash2, AlertTriangle, CheckCircle, Info, Layers, Edit2, ChevronRight } from "lucide-react"
+<!DOCTYPE html>
+<html lang="no">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Platform Decision Tool</title>
+    <script src="https://unpkg.com/react@18/umd/react.production.min.js" crossorigin></script>
+    <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js" crossorigin></script>
+    <script src="https://unpkg.com/prop-types@15.8.1/prop-types.min.js"></script>
+    <script src="https://unpkg.com/recharts@2.12.7/umd/Recharts.js"></script>
+    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+    <script src="https://unpkg.com/lucide@0.379.0/dist/umd/lucide.min.js"></script>
+    <style>
+        body { margin: 0; padding: 0; background-color: #F4F3EF; color: #1A1917; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; }
+    </style>
+</head>
+<body>
+    <div id="root"></div>
 
-// ── Colors ────────────────────────────────────────────────────────────────────
-const C = {
-  bg:"#F4F3EF", surface:"#FFFFFF", raised:"#EDECEA", border:"#DDD9D0", borderHi:"#C4C0B6",
-  text:"#1A1917", sub:"#5C5B54", muted:"#9A9890",
-  green:"#0D7A56", greenBg:"#E6F5EE", greenBd:"#A8DCC4",
-  red:"#B83820",   redBg:"#FDF0EC",   redBd:"#F0B8A4",
-  amber:"#8C6200", amberBg:"#FDF6E0", amberBd:"#E8CC7A",
-  blue:"#1856A0",  blueBg:"#EBF2FF",  blueBd:"#A8C4F0",
-  sh:"0 1px 3px rgba(0,0,0,0.07)", shMd:"0 4px 12px rgba(0,0,0,0.09)",
-}
+    <script type="text/babel">
+        // ── Henter funksjoner fra bibliotekene (erstatter imports) ────────────
+        const { useState, useEffect } = React;
+        const { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Cell } = Recharts;
 
-// ── Shared logic ──────────────────────────────────────────────────────────────
-const IS = { width:"100%", background:"#FFFFFF", border:"1.5px solid #DDD9D0", borderRadius:8, padding:"9px 12px", color:"#1A1917", fontSize:14, outline:"none", boxSizing:"border-box", fontFamily:"inherit" }
-const fmt   = n => Math.round(n).toLocaleString("nb-NO")
-const emptyD = () => ({ ideology:0, competence:0, working_env:0, user_sat:0, reputation:0, infra:0, shadow_it:0, technical:0, governance:0 })
-const netDebt = d => Object.values(d||{}).reduce((a,b)=>a+b, 0)
-const orientLabel = v => v<30?"Primært exploitasjon":v<45?"Overvekt exploitasjon":v<=55?"Balansert":v<70?"Overvekt explorasjon":"Primært explorasjon"
+        // ── Ikon-hjelper for nettleseren ──────────────────────────────────────
+        const Icon = ({ name, size = 16, style = {}, className = "" }) => {
+            useEffect(() => { if(window.lucide) window.lucide.createIcons(); }, [name]);
+            return <i data-lucide={name} style={{ width: size, height: size, display: 'inline-block', ...style }} className={className}></i>;
+        };
 
-// ── Data ──────────────────────────────────────────────────────────────────────
-const DEBTS = [
-  {k:"ideology",    n:"Ideologi",         s:"Ideologi",    d:"Teknologibias og leverandørpreferanser", q:"Er valget drevet av teknisk modenhet, eller kjente leverandørpreferanser?"},
-  {k:"competence",  n:"Kompetanse",        s:"Kompetanse",  d:"Kompetanse, opplæring og kognitiv belastning", q:"Frigjør valget intern kapasitet, eller krever det ny spesialistkompetanse?"},
-  {k:"working_env", n:"Arbeidsmiljø",      s:"Arbeidsmiljø",d:"Kultur, DevEx og absorbsjonsevne", q:"Forbedrer valget utvikleropplevelsen og reduserer friksjon?"},
-  {k:"user_sat",    n:"Brukertilfredshet", s:"Brukertilf.", d:"Sluttbrukernes opplevelse av IT-leveransen", q:"Påvirker valget sluttbrukernes arbeidsflyt positivt?"},
-  {k:"reputation",  n:"Omdømme",           s:"Omdømme",     d:"Tillit til IT-funksjonen over tid", q:"Styrker valget tilliten to plattformteamet?"},
-  {k:"infra",       n:"Infrastruktur",     s:"Infra",       d:"Driftsintensitet, IaC-gjeld og lock-in", q:"Reduserer valget driftsoverhead og vendor lock-in?"},
-  {k:"shadow_it",   n:"Shadow IT",         s:"Shadow IT",   d:"Workarounds utenfor plattformens kontroll", q:"Reduserer valget behovet for desentraliserte workarounds?"},
-  {k:"technical",   n:"Teknisk gjeld",     s:"Teknisk",     d:"Dokumentasjon, automatisering og vedlikehold", q:"Er løsningen kodifisert i IaC og reduserer vedlikeholdskostnad?"},
-  {k:"governance",  n:"Governance",        s:"Governance",  d:"Beslutningsstrukturer og compliance-overhead", q:"Forenkler valget godkjenningsprosesser?"},
-]
+        // ── Farger og stiler ──────────────────────────────────────────────────
+        const C = {
+            bg:"#F4F3EF", surface:"#FFFFFF", raised:"#EDECEA", border:"#DDD9D0", borderHi:"#C4C0B6",
+            text:"#1A1917", sub:"#5C5B54", muted:"#9A9890",
+            green:"#0D7A56", greenBg:"#E6F5EE", greenBd:"#A8DCC4",
+            red:"#B83820",   redBg:"#FDF0EC",   redBd:"#F0B8A4",
+            amber:"#8C6200", amberBg:"#FDF6E0", amberBd:"#E8CC7A",
+            blue:"#1856A0",  blueBg:"#EBF2FF",  blueBd:"#A8C4F0",
+            sh:"0 1px 3px rgba(0,0,0,0.07)", shMd:"0 4px 12px rgba(0,0,0,0.09)",
+        };
 
-const TYPES = {
-  tech:    { l:"Teknologivalg",    e:"⚙️", desc:"Tekniske løsninger og plattformer",       ph:"F.eks. Azure Firewall — managed cloud-brannmur" },
-  org:     { l:"Organisasjonsvalg",e:"🏗️", desc:"Teamstruktur, ansvar og kompetansemodell", ph:"F.eks. Omstrukturering til plattformteam" },
-  process: { l:"Prosessvalg",      e:"🔄", desc:"Arbeidsmetodikk og leveranseprosess",      ph:"F.eks. CI/CD-pipeline for infrastrukturendringer" },
-  design:  { l:"Designvalg",       e:"🧩", desc:"Arkitektur og langsiktig endringsevne",    ph:"F.eks. Microservices med API-first integrasjonslag" },
-}
+        const IS = { width:"100%", background:"#FFFFFF", border:"1.5px solid #DDD9D0", borderRadius:8, padding:"9px 12px", color:"#1A1917", fontSize:14, outline:"none", boxSizing:"border-box", fontFamily:"inherit" };
+        const fmt = n => Math.round(n).toLocaleString("nb-NO");
+        const emptyD = () => ({ ideology:0, competence:0, working_env:0, user_sat:0, reputation:0, infra:0, shadow_it:0, technical:0, governance:0 });
+        const netDebt = d => Object.values(d||{}).reduce((a,b)=>a+b, 0);
+        const orientLabel = v => v<30?"Primært exploitasjon":v<45?"Overvekt exploitasjon":v<=55?"Balansert":v<70?"Overvekt explorasjon":"Primært explorasjon";
 
-const EFFECTS = {
-  tech:    ["Reduserer driftsoverhead","Øker automatisering","Frigjør intern kapasitet","Forbedrer integrasjonsevne","Muliggjør ny kapabilitet","Reduserer vendor lock-in","Forbedrer sikkerhet/compliance","Reduserer teknisk gjeld"],
-  org:     ["Sentralisering av beslutninger","Desentralisering / økt autonomi","Ny rollestruktur","Redusert kognitiv belastning","Kompetanseoverføring","Outsourcing / insourcing","Bedre IT–forretningsalignment","Styrket innovasjonsevne"],
-  process: ["Kortere leveransetid","Redusert manuelt arbeid","Bedre compliance-håndtering","Økt kvalitetssikring","Raskere feilretting (MTTR)","Bedre sporbarhet","Mer forutsigbar leveranse","Redusert endringsrisiko"],
-  design:  ["Løsere kobling","Bedre skalerbarhet","Økt gjenbruk","Redusert kompleksitet","API-first","Redusert lock-in","Enklere partneronboarding","Bedre fremtidig endringsevne"],
-}
+        // ── Data og Konfigurasjon ─────────────────────────────────────────────
+        const DEBTS = [
+            {k:"ideology",    n:"Ideologi",         s:"Ideologi",    d:"Teknologibias og leverandørpreferanser"},
+            {k:"competence",  n:"Kompetanse",        s:"Kompetanse",  d:"Kompetanse, opplæring og kognitiv belastning"},
+            {k:"working_env", n:"Arbeidsmiljø",      s:"Arbeidsmiljø",d:"Kultur, DevEx og absorbsjonsevne"},
+            {k:"user_sat",    n:"Brukertilfredshet", s:"Brukertilf.", d:"Sluttbrukernes opplevelse av IT-leveransen"},
+            {k:"reputation",  n:"Omdømme",           s:"Omdømme",     d:"Tillit til IT-funksjonen over tid"},
+            {k:"infra",       n:"Infrastruktur",     s:"Infra",       d:"Driftsintensitet, IaC-gjeld og lock-in"},
+            {k:"shadow_it",   n:"Shadow IT",         s:"Shadow IT",   d:"Workarounds utenfor plattformens kontroll"},
+            {k:"technical",   n:"Teknisk gjeld",     s:"Teknisk",     d:"Dokumentasjon, automatisering og vedlikehold"},
+            {k:"governance",  n:"Governance",        s:"Governance",  d:"Beslutningsstrukturer og compliance-overhead"}
+        ];
 
-const TENSIONS = [
-  {k:"alignment", l:"Alignment",   d:"Forretningstransformasjon ↔ Medarbeidertransformasjon"},
-  {k:"change",    l:"Endring",      d:"Radikal innovasjon ↔ Inkrementell innovasjon"},
-  {k:"knowledge", l:"Kunnskap",     d:"Anskaffe ny kompetanse ↔ Vedlikeholde eksisterende"},
-  {k:"delivery",  l:"Leveranse",    d:"Ny infrastruktur ↔ Legacy-miljø"},
-  {k:"sourcing",  l:"Sourcing",     d:"Ekstern anskaffelse ↔ Intern utvikling"},
-  {k:"risk",      l:"Risiko",       d:"Innovasjon ↔ Compliance og kontroll"},
-  {k:"objective", l:"Målsetting",   d:"Ny digital kapabilitet ↔ Digital infrastruktur"},
-  {k:"value",     l:"Verdiskaping", d:"Kundeverdi ↔ Aksjonærverdi"},
-  {k:"agenda",    l:"Agenda",       d:"Digital transformasjon ↔ Digitalisering"},
-]
+        const TYPES = {
+            tech:    { l:"Teknologivalg",    e:"⚙️", desc:"Tekniske løsninger og plattformer", ph:"F.eks. Azure Firewall" },
+            org:     { l:"Organisasjonsvalg",e:"🏗️", desc:"Teamstruktur og kompetansemodell", ph:"F.eks. Plattformteam" },
+            process: { l:"Prosessvalg",      e:"🔄", desc:"Arbeidsmetodikk og leveranse", ph:"F.eks. CI/CD-pipeline" },
+            design:  { l:"Designvalg",       e:"🧩", desc:"Arkitektur og endringsevne", ph:"F.eks. API-first integrasjon" }
+        };
 
-const PHASES = ["Assimilering","Rekonstruksjon","Materialisering"]
+        const EFFECTS = {
+            tech:    ["Reduserer driftsoverhead","Øker automatisering","Frigjør intern kapasitet","Muliggjør ny kapabilitet"],
+            org:     ["Sentralisering av beslutninger","Desentralisering / økt autonomi","Redusert kognitiv belastning"],
+            process: ["Kortere leveransetid","Redusert manuelt arbeid","Bedre compliance-håndtering","Redusert endringsrisiko"],
+            design:  ["Løsere kobling","Bedre skalerbarhet","Økt gjenbruk","Redusert kompleksitet"]
+        };
 
-const EXPLOIT_E = ["Reduserer driftsoverhead","Øker automatisering","Kortere leveransetid","Redusert manuelt arbeid","Reduserer teknisk gjeld","Reduserer vendor lock-in","Bedre compliance-håndtering","Mer forutsigbar leveranse","Redusert endringsrisiko","Outsourcing / insourcing"]
-const EXPLORE_E = ["Muliggjør ny kapabilitet","Forbedrer integrasjonsevne","Styrket innovasjonsevne","Løsere kobling","API-first","Enklere partneronboarding","Bedre fremtidig endringsevne","Bedre skalerbarhet","Desentralisering / økt autonomi"]
+        const TENSIONS = [
+            {k:"alignment", l:"Alignment", d:"Forretningstransformasjon ↔ Medarbeidertransformasjon"},
+            {k:"change", l:"Endring", d:"Radikal innovasjon ↔ Inkrementell innovasjon"},
+            {k:"knowledge", l:"Kunnskap", d:"Anskaffe ny kompetanse ↔ Vedlikeholde eksisterende"},
+            {k:"delivery", l:"Leveranse", d:"Ny infrastruktur ↔ Legacy-miljø"},
+            {k:"risk", l:"Risiko", d:"Innovasjon ↔ Compliance og kontroll"}
+        ];
 
-const suggestOrient = d => {
-  let s = 50
-  if (EXPLOIT_E.includes(d.effect)) s -= 25
-  else if (EXPLORE_E.includes(d.effect)) s += 25
-  const nd = netDebt(d.debts)
-  if (nd < -2) s -= 8
-  if (nd > 3)  s += 8
-  return Math.max(5, Math.min(95, Math.round(s)))
-}
-const getOrient = d => d.orient != null ? d.orient : suggestOrient(d)
+        const PHASES = ["Assimilering","Rekonstruksjon","Materialisering"];
 
-// ── Shared components ─────────────────────────────────────────────────────────
-function Lbl({ t, hint }) {
-  return (
-    <div style={{ marginBottom:6 }}>
-      <div style={{ fontSize:11, fontWeight:700, color:C.sub, textTransform:"uppercase", letterSpacing:"0.07em" }}>{t}</div>
-      {hint && <div style={{ fontSize:11, color:C.muted, marginTop:1, lineHeight:1.4 }}>{hint}</div>}
-    </div>
-  )
-}
+        const suggestOrient = d => {
+            let s = 50;
+            if (["Reduserer driftsoverhead","Kortere leveransetid"].includes(d.effect)) s -= 25;
+            else if (["Muliggjør ny kapabilitet","Bedre skalerbarhet"].includes(d.effect)) s += 25;
+            const nd = netDebt(d.debts);
+            if (nd < -2) s -= 8;
+            if (nd > 3)  s += 8;
+            return Math.max(5, Math.min(95, Math.round(s)));
+        };
+        const getOrient = d => d.orient != null ? d.orient : suggestOrient(d);
 
-function Card({ children, style={} }) {
-  return <div style={{ background:C.surface, border:`1px solid ${C.border}`, borderRadius:12, boxShadow:C.sh, ...style }}>{children}</div>
-}
+        // ── UI Komponenter ────────────────────────────────────────────────────
+        function Lbl({ t, hint }) {
+            return (
+                <div style={{ marginBottom:6 }}>
+                    <div style={{ fontSize:11, fontWeight:700, color:C.sub, textTransform:"uppercase", letterSpacing:"0.07em" }}>{t}</div>
+                    {hint && <div style={{ fontSize:11, color:C.muted, marginTop:1, lineHeight:1.4 }}>{hint}</div>}
+                </div>
+            );
+        }
 
-function Tag({ color, text }) {
-  const m = { green:[C.greenBg,C.green,C.greenBd], blue:[C.blueBg,C.blue,C.blueBd], amber:[C.amberBg,C.amber,C.amberBd], red:[C.redBg,C.red,C.redBd] }
-  const [bg,tc,bd] = m[color] || m.green
-  return <span style={{ fontSize:11, padding:"3px 10px", borderRadius:20, fontWeight:600, background:bg, color:tc, border:`1px solid ${bd}` }}>{text}</span>
-}
+        function Card({ children, style={} }) {
+            return <div style={{ background:C.surface, border:`1px solid ${C.border}`, borderRadius:12, boxShadow:C.sh, ...style }}>{children}</div>;
+        }
 
-function TypeBadge({ type }) {
-  const m = { tech:[C.blueBg,C.blue,C.blueBd], org:["#F0EBFF","#5030A0","#C8B0F0"], process:[C.greenBg,C.green,C.greenBd], design:[C.amberBg,C.amber,C.amberBd] }
-  const [bg,tc,bd] = m[type] || m.tech
-  return <span style={{ fontSize:11, padding:"3px 10px", borderRadius:20, fontWeight:600, background:bg, color:tc, border:`1px solid ${bd}` }}>{TYPES[type]?.l || "Valg"}</span>
-}
+        function Tag({ color, text }) {
+            const m = { green:[C.greenBg,C.green,C.greenBd], blue:[C.blueBg,C.blue,C.blueBd], amber:[C.amberBg,C.amber,C.amberBd] };
+            const [bg,tc,bd] = m[color] || m.green;
+            return <span style={{ fontSize:11, padding:"3px 10px", borderRadius:20, fontWeight:600, background:bg, color:tc, border:`1px solid ${bd}` }}>{text}</span>;
+        }
 
-function Tip({ color, text }) {
-  const m = { green:[C.greenBg,C.greenBd,C.green,CheckCircle], red:[C.redBg,C.redBd,C.red,AlertTriangle], amber:[C.amberBg,C.amberBd,C.amber,Info] }
-  const [bg,bd,tc,Icon] = m[color] || m.amber
-  return (
-    <div style={{ display:"flex", gap:10, background:bg, border:`1px solid ${bd}`, borderRadius:10, padding:"11px 15px", fontSize:13, color:tc, lineHeight:1.6, marginTop:12 }}>
-      <Icon size={15} style={{ flexShrink:0, marginTop:2 }} /><span>{text}</span>
-    </div>
-  )
-}
+        function TypeBadge({ type }) {
+            const m = { tech:[C.blueBg,C.blue,C.blueBd], org:["#F0EBFF","#5030A0","#C8B0F0"], process:[C.greenBg,C.green,C.greenBd], design:[C.amberBg,C.amber,C.amberBd] };
+            const [bg,tc,bd] = m[type] || m.tech;
+            return <span style={{ fontSize:11, padding:"3px 10px", borderRadius:20, fontWeight:600, background:bg, color:tc, border:`1px solid ${bd}` }}>{TYPES[type]?.l || "Valg"}</span>;
+        }
 
-function ChartTT({ active, payload, label }) {
-  if (!active || !payload?.length) return null
-  const v = payload[0].value
-  return (
-    <div style={{ background:C.surface, border:`1px solid ${C.border}`, borderRadius:8, padding:"9px 13px", fontSize:12, boxShadow:C.shMd }}>
-      <div style={{ color:C.sub, marginBottom:3, fontWeight:600 }}>{label}</div>
-      <div style={{ fontWeight:700, fontSize:15, color:v<0?C.green:v>0?C.red:C.muted }}>{v>0?"+":""}{v}</div>
-    </div>
-  )
-}
+        function Tip({ color, text }) {
+            const m = { green:[C.greenBg,C.greenBd,C.green,"check-circle"], red:[C.redBg,C.redBd,C.red,"alert-triangle"], amber:[C.amberBg,C.amberBd,C.amber,"info"] };
+            const [bg,bd,tc,iconName] = m[color] || m.amber;
+            return (
+                <div style={{ display:"flex", gap:10, background:bg, border:`1px solid ${bd}`, borderRadius:10, padding:"11px 15px", fontSize:13, color:tc, lineHeight:1.6, marginTop:12 }}>
+                    <Icon name={iconName} size={15} style={{ flexShrink:0, marginTop:2 }} /><span>{text}</span>
+                </div>
+            );
+        }
 
-function Stat({ label, value, sub, color, bg }) {
-  return (
-    <div style={{ background:bg||C.raised, border:`1px solid ${C.border}`, borderRadius:10, padding:"12px 14px", textAlign:"center" }}>
-      <div style={{ fontSize:10, fontWeight:700, color:C.muted, textTransform:"uppercase", letterSpacing:"0.07em", marginBottom:5 }}>{label}</div>
-      <div style={{ fontSize:16, fontWeight:700, color:color||C.text }}>{value}</div>
-      {sub && <div style={{ fontSize:10, color:C.muted, marginTop:4 }}>{sub}</div>}
-    </div>
-  )
-}
+        function ChartTT({ active, payload, label }) {
+            if (!active || !payload?.length) return null;
+            const v = payload[0].value;
+            return (
+                <div style={{ background:C.surface, border:`1px solid ${C.border}`, borderRadius:8, padding:"9px 13px", fontSize:12, boxShadow:C.shMd }}>
+                    <div style={{ color:C.sub, marginBottom:3, fontWeight:600 }}>{label}</div>
+                    <div style={{ fontWeight:700, fontSize:15, color:v<0?C.green:v>0?C.red:C.muted }}>{v>0?"+":""}{v}</div>
+                </div>
+            );
+        }
 
-function DebtBar({ label, value, max }) {
-  const pct = Math.abs(value) / max * 100
-  const bc = value < 0 ? C.green : C.red
-  return (
-    <div style={{ display:"flex", alignItems:"center", gap:10, marginBottom:8 }}>
-      <span style={{ fontSize:12, color:C.sub, width:110, flexShrink:0 }}>{label}</span>
-      <div style={{ flex:1, height:6, background:C.raised, borderRadius:3, overflow:"hidden", border:`1px solid ${C.border}` }}>
-        <div style={{ height:"100%", width:pct+"%", background:bc, borderRadius:3 }} />
-      </div>
-      <span style={{ fontSize:12, fontWeight:700, color:bc, width:28, textAlign:"right" }}>{value>0?"+":""}{value}</span>
-    </div>
-  )
-}
+        function Stat({ label, value, sub, color, bg }) {
+            return (
+                <div style={{ background:bg||C.raised, border:`1px solid ${C.border}`, borderRadius:10, padding:"12px 14px", textAlign:"center" }}>
+                    <div style={{ fontSize:10, fontWeight:700, color:C.muted, textTransform:"uppercase", letterSpacing:"0.07em", marginBottom:5 }}>{label}</div>
+                    <div style={{ fontSize:16, fontWeight:700, color:color||C.text }}>{value}</div>
+                    {sub && <div style={{ fontSize:10, color:C.muted, marginTop:4 }}>{sub}</div>}
+                </div>
+            );
+        }
 
-function DebtSlider({ cat, value, onChange }) {
-  const vc = value<0?C.green:value>0?C.red:C.sub
-  const bg = value<0?C.greenBg:value>0?C.redBg:C.raised
-  const bd = value<0?C.greenBd:value>0?C.redBd:C.border
-  return (
-    <div style={{ background:bg, border:`1px solid ${bd}`, borderRadius:9, padding:"10px 14px", marginBottom:7, transition:"all 0.2s" }}>
-      <div style={{ display:"flex", justifyContent:"space-between", marginBottom:2 }}>
-        <span style={{ fontSize:13, fontWeight:600, color:C.text }}>{cat.n}</span>
-        <span style={{ fontSize:13, fontWeight:700, color:vc }}>{value>0?"+":""}{value}</span>
-      </div>
-      <div style={{ fontSize:11, color:C.sub, marginBottom:7 }}>{cat.d}</div>
-      <input type="range" min="-5" max="5" step="1" value={value} onChange={onChange} style={{ width:"100%", accentColor:value<0?C.green:value>0?C.red:C.sub }} />
-      <div style={{ display:"flex", justifyContent:"space-between", fontSize:10, color:C.muted, marginTop:2 }}>
-        <span>← Amortisering</span><span>Lån →</span>
-      </div>
-    </div>
-  )
-}
+        // ── Matrise ───────────────────────────────────────────────────────────
+        function Matrix({ decisions, onOpen }) {
+            if (!decisions.length) return <div style={{ padding:"48px 0", textAlign:"center", color:C.muted, fontSize:14 }}>Legg til valg for å se porteføljematrisen.</div>;
 
-function GreenBtn({ onClick, children, full }) {
-  return (
-    <button onClick={onClick} style={{ width:full?"100%":undefined, display:"flex", alignItems:"center", justifyContent:"center", gap:8, padding:"10px 20px", background:C.green, color:"#FFF", border:"none", borderRadius:9, fontSize:14, fontWeight:600, cursor:"pointer", fontFamily:"inherit", transition:"opacity 0.2s" }}>
-      {children}
-    </button>
-  )
-}
+            const maxAbs = Math.max(5, ...decisions.map(d => Math.abs(netDebt(d.debts))));
+            const eN = decisions.filter(d => getOrient(d) < 45).length;
+            const xN = decisions.filter(d => getOrient(d) > 55).length;
+            const bN = decisions.length - eN - xN;
 
-function DarkBtn({ onClick, children, full }) {
-  return (
-    <button onClick={onClick} style={{ width:full?"100%":undefined, display:"flex", alignItems:"center", justifyContent:"center", gap:8, padding:"10px 20px", background:C.text, color:"#FFF", border:"none", borderRadius:9, fontSize:14, fontWeight:600, cursor:"pointer", fontFamily:"inherit", transition:"background 0.3s" }}>
-      {children}
-    </button>
-  )
-}
+            const typeCols = { tech:[C.blueBg, C.blue, C.blueBd], org:["#F0EBFF","#5030A0","#C8B0F0"], process:[C.greenBg, C.green, C.greenBd], design:[C.amberBg, C.amber, C.amberBd] };
 
-// ── Portfolio Matrix ──────────────────────────────────────────────────────────
-function Matrix({ decisions, onOpen }) {
-  if (!decisions.length) return <div style={{ padding:"48px 0", textAlign:"center", color:C.muted, fontSize:14 }}>Legg til valg for å se porteføljematrisen.</div>
+            return (
+                <div style={{ padding:"20px 22px" }}>
+                    <div style={{ fontSize:13, fontWeight:700, color:C.text, marginBottom:4 }}>Porteføljematrise — ambideksteriprofil</div>
+                    <div style={{ fontSize:12, color:C.sub, marginBottom:14 }}>Plassering basert på strategisk orientering og netto gjeld.</div>
 
-  const maxAbs = Math.max(5, ...decisions.map(d => Math.abs(netDebt(d.debts))))
-  const eN = decisions.filter(d => getOrient(d) < 45).length
-  const xN = decisions.filter(d => getOrient(d) > 55).length
-  const bN = decisions.length - eN - xN
-  const eP = Math.round(eN / decisions.length * 100)
-  const xP = Math.round(xN / decisions.length * 100)
-
-  const typeCols = {
-    tech:    [C.blueBg, C.blue, C.blueBd],
-    org:     ["#F0EBFF","#5030A0","#C8B0F0"],
-    process: [C.greenBg, C.green, C.greenBd],
-    design:  [C.amberBg, C.amber, C.amberBd],
-  }
-
-  return (
-    <div style={{ padding:"20px 22px" }}>
-      <div style={{ fontSize:13, fontWeight:700, color:C.text, marginBottom:4 }}>Porteføljematrise — ambideksteriprofil</div>
-      <div style={{ fontSize:12, color:C.sub, marginBottom:14 }}>Plassering basert på strategisk orientering og netto gjeld. Åpne et valg for manuell justering i analytikermodusen.</div>
-
-      <div style={{ position:"relative", height:290, border:`1px solid ${C.border}`, borderRadius:12, overflow:"hidden", background:C.surface, marginBottom:14 }}>
-        {/* Quadrant backgrounds */}
-        <div style={{ position:"absolute", left:0, top:0, width:"50%", height:"50%", background:C.redBg, display:"flex", flexDirection:"column", justifyContent:"flex-start", padding:"9px 12px" }}>
-          <div style={{ fontSize:11, fontWeight:700, color:C.red }}>Driftspress</div>
-          <div style={{ fontSize:10, color:C.muted }}>Høy gjeld · Exploit</div>
-        </div>
-        <div style={{ position:"absolute", left:"50%", top:0, width:"50%", height:"50%", background:"rgba(24,86,160,0.05)", display:"flex", flexDirection:"column", justifyContent:"flex-start", padding:"9px 12px" }}>
-          <div style={{ fontSize:11, fontWeight:700, color:C.blue }}>Innovasjon under press</div>
-          <div style={{ fontSize:10, color:C.muted }}>Høy gjeld · Explore</div>
-        </div>
-        <div style={{ position:"absolute", left:0, top:"50%", width:"50%", height:"50%", background:"rgba(13,122,86,0.05)", display:"flex", flexDirection:"column", justifyContent:"flex-end", padding:"9px 12px" }}>
-          <div style={{ fontSize:11, fontWeight:700, color:C.green }}>Effektivisering</div>
-          <div style={{ fontSize:10, color:C.muted }}>Amortisering · Exploit</div>
-        </div>
-        <div style={{ position:"absolute", left:"50%", top:"50%", width:"50%", height:"50%", background:"rgba(24,86,160,0.07)", display:"flex", flexDirection:"column", justifyContent:"flex-end", padding:"9px 12px" }}>
-          <div style={{ fontSize:11, fontWeight:700, color:C.blue }}>Skalering</div>
-          <div style={{ fontSize:10, color:C.muted }}>Amortisering · Explore</div>
-        </div>
-
-        {/* Axis lines */}
-        <div style={{ position:"absolute", left:"50%", top:0, bottom:0, width:1, background:C.border }} />
-        <div style={{ position:"absolute", top:"50%", left:0, right:0, height:1, background:C.border }} />
-
-        {/* Axis labels */}
-        <div style={{ position:"absolute", top:8, left:"50%", transform:"translateX(-50%)", fontSize:10, fontWeight:700, color:C.muted, background:C.surface, padding:"1px 6px", borderRadius:4 }}>Høy gjeld</div>
-        <div style={{ position:"absolute", bottom:8, left:"50%", transform:"translateX(-50%)", fontSize:10, fontWeight:700, color:C.muted, background:C.surface, padding:"1px 6px", borderRadius:4 }}>Amortisering</div>
-        <div style={{ position:"absolute", left:6, top:"50%", transform:"translateY(-50%)", fontSize:10, fontWeight:700, color:C.muted }}>Exploit</div>
-        <div style={{ position:"absolute", right:6, top:"50%", transform:"translateY(-50%)", fontSize:10, fontWeight:700, color:C.muted }}>Explore</div>
-
-        {/* Decision dots */}
-        {decisions.map(d => {
-          const o = getOrient(d)
-          const nd = netDebt(d.debts)
-          const xPct = o
-          const yPct = 50 - (nd / maxAbs) * 42
-          const [bg,tc,bd] = typeCols[d.type] || typeCols.tech
-          return (
-            <div key={d.id} onClick={() => onOpen(d.id)} title={d.name}
-              style={{ position:"absolute", left:`calc(${xPct}% - 44px)`, top:`calc(${yPct}% - 13px)`, background:bg, border:`1px solid ${bd}`, borderRadius:20, padding:"4px 10px", fontSize:11, fontWeight:600, color:tc, whiteSpace:"nowrap", maxWidth:120, overflow:"hidden", textOverflow:"ellipsis", cursor:"pointer", boxShadow:C.sh, zIndex:2 }}>
-              {d.name}
-            </div>
-          )
-        })}
-      </div>
-
-      <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr 1fr", gap:10, marginBottom:8 }}>
-        <Stat label="Exploitasjon" value={eN} sub={eP+"%"} color={C.green} bg={C.greenBg} />
-        <Stat label="Balansert"    value={bN} sub={Math.round(bN/decisions.length*100)+"%"} color={C.amber} bg={C.amberBg} />
-        <Stat label="Explorasjon"  value={xN} sub={xP+"%"} color={C.blue}  bg={C.blueBg} />
-      </div>
-      {eP > 75 && <Tip color="amber" text={`${eP}% exploitasjon. Vurder om porteføljen har kapasitet til innovasjon og langsiktig kapabilitetsbygging.`} />}
-      {xP > 75 && <Tip color="amber" text={`${xP}% explorasjon. Vurder om det er tilstrekkelig fokus på operasjonell stabilitet og gjeldshåndtering.`} />}
-      {eP <= 75 && xP <= 75 && <Tip color="green" text="Porteføljen har god balanse mellom exploitasjon og explorasjon — tegn på organisatorisk ambideksteri." />}
-    </div>
-  )
-}
-
-// ── Phase Roadmap ─────────────────────────────────────────────────────────────
-function Roadmap({ decisions, onOpen }) {
-  if (!decisions.length) return <div style={{ padding:"48px 0", textAlign:"center", color:C.muted, fontSize:14 }}>Legg til valg for å se fasekartet.</div>
-
-  const untagged = decisions.filter(d => !d.phase)
-  const phaseColors = {
-    Assimilering:  [C.blue,  C.blueBg,  C.blueBd],
-    Rekonstruksjon:[C.amber, C.amberBg, C.amberBd],
-    Materialisering:[C.green,C.greenBg, C.greenBd],
-  }
-
-  return (
-    <div style={{ padding:"20px 22px" }}>
-      <div style={{ fontSize:13, fontWeight:700, color:C.text, marginBottom:4 }}>Fasekart — veikart for ledelsen</div>
-      <div style={{ fontSize:12, color:C.sub, marginBottom:12 }}>Tildel fase til hvert valg i analytikermodusen.</div>
-      {untagged.length > 0 && (
-        <div style={{ display:"flex", gap:8, alignItems:"center", background:C.amberBg, border:`1px solid ${C.amberBd}`, borderRadius:9, padding:"9px 14px", marginBottom:14, fontSize:12, color:C.amber }}>
-          <Info size={13} />{untagged.length} valg mangler fasetildeling.
-        </div>
-      )}
-      <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr 1fr", gap:12 }}>
-        {PHASES.map((phase, i) => {
-          const list = decisions.filter(d => d.phase === phase)
-          const [tc, bg, bd] = phaseColors[phase] || [C.blue, C.blueBg, C.blueBd]
-          return (
-            <div key={phase}>
-              <div style={{ background:bg, border:`1px solid ${bd}`, borderRadius:10, padding:"10px 14px", marginBottom:8 }}>
-                <div style={{ fontSize:13, fontWeight:700, color:tc }}>{i+1}. {phase}</div>
-                <div style={{ fontSize:11, color:C.muted, marginTop:2 }}>{list.length} tiltak</div>
-              </div>
-              {list.length === 0
-                ? <div style={{ border:`1.5px dashed ${C.border}`, borderRadius:9, padding:"22px 12px", textAlign:"center", color:C.muted, fontSize:12 }}>Ingen tiltak ennå</div>
-                : list.map(d => {
-                    const nd = netDebt(d.debts)
-                    return (
-                      <div key={d.id} onClick={() => onOpen(d.id)}
-                        style={{ background:C.surface, border:`1px solid ${C.border}`, borderRadius:9, padding:"11px 13px", cursor:"pointer", marginBottom:7, transition:"all 0.15s" }}
-                        onMouseEnter={e => { e.currentTarget.style.borderColor=bd; e.currentTarget.style.background=bg }}
-                        onMouseLeave={e => { e.currentTarget.style.borderColor=C.border; e.currentTarget.style.background=C.surface }}>
-                        <div style={{ fontSize:13, fontWeight:600, color:C.text, marginBottom:5 }}>{d.name}</div>
-                        <TypeBadge type={d.type} />
-                        <div style={{ display:"flex", gap:10, marginTop:7, fontSize:11 }}>
-                          <span style={{ color:nd<0?C.green:nd>0?C.red:C.muted }}>Gjeld: {nd>0?"+":""}{nd}</span>
-                          {d.eff != null && <span style={{ color:d.eff>=1?C.green:C.red }}>xV: {d.eff.toFixed(2)}x</span>}
+                    <div style={{ position:"relative", height:290, border:`1px solid ${C.border}`, borderRadius:12, overflow:"hidden", background:C.surface, marginBottom:14 }}>
+                        <div style={{ position:"absolute", left:0, top:0, width:"50%", height:"50%", background:C.redBg, padding:"9px 12px" }}>
+                            <div style={{ fontSize:11, fontWeight:700, color:C.red }}>Driftspress</div><div style={{ fontSize:10, color:C.muted }}>Høy gjeld · Exploit</div>
                         </div>
-                      </div>
-                    )
-                  })
-              }
-            </div>
-          )
-        })}
-      </div>
-    </div>
-  )
-}
+                        <div style={{ position:"absolute", left:"50%", top:0, width:"50%", height:"50%", background:"rgba(24,86,160,0.05)", padding:"9px 12px" }}>
+                            <div style={{ fontSize:11, fontWeight:700, color:C.blue }}>Innovasjon under press</div><div style={{ fontSize:10, color:C.muted }}>Høy gjeld · Explore</div>
+                        </div>
+                        <div style={{ position:"absolute", left:0, top:"50%", width:"50%", height:"50%", background:"rgba(13,122,86,0.05)", display:"flex", flexDirection:"column", justifyContent:"flex-end", padding:"9px 12px" }}>
+                            <div style={{ fontSize:11, fontWeight:700, color:C.green }}>Effektivisering</div><div style={{ fontSize:10, color:C.muted }}>Amortisering · Exploit</div>
+                        </div>
+                        <div style={{ position:"absolute", left:"50%", top:"50%", width:"50%", height:"50%", background:"rgba(24,86,160,0.07)", display:"flex", flexDirection:"column", justifyContent:"flex-end", padding:"9px 12px" }}>
+                            <div style={{ fontSize:11, fontWeight:700, color:C.blue }}>Skalering</div><div style={{ fontSize:10, color:C.muted }}>Amortisering · Explore</div>
+                        </div>
 
-// ── Detail view ───────────────────────────────────────────────────────────────
-function Detail({ decision, onBack, onUpdate }) {
-  const auto = suggestOrient(decision)
-  const [a, setA] = useState({ phase:decision.phase||"", tension:decision.tension||"", orient:decision.orient??null, notes:decision.notes||"" })
-  const [w, setW] = useState({ debts:{...decision.debts}, cost:decision.cost||"", hours:decision.hours||"", hourRate:decision.hourRate||1100, horizons:decision.horizons||8, prob:decision.prob||0.7, absorb:decision.absorb||0.6 })
-  const [editW, setEditW] = useState(false)
-  const [sA, setSA] = useState(false)
-  const [sW, setSW] = useState(false)
+                        <div style={{ position:"absolute", left:"50%", top:0, bottom:0, width:1, background:C.border }} />
+                        <div style={{ position:"absolute", top:"50%", left:0, right:0, height:1, background:C.border }} />
 
-  const cost    = parseFloat(w.cost) || 0
-  const hours   = parseFloat(w.hours) || 0
-  const rate    = parseFloat(w.hourRate) || 1100
-  const hor     = parseFloat(w.horizons) || 8
-  const xv      = hours * rate * hor * (w.prob||0.7) * (w.absorb||0.6)
-  const eff     = cost > 0 ? xv / cost : null
-  const nd      = netDebt(w.debts)
-  const dc      = nd<0?C.green:nd>0?C.red:C.sub
-  const orientV = a.orient != null ? a.orient : auto
-  const sig     = DEBTS.filter(c => (w.debts[c.k]||0) !== 0)
-  const mx      = Math.max(1, ...sig.map(c => Math.abs(w.debts[c.k])))
-  const t       = a.tension ? TENSIONS.find(x => x.k === a.tension) : null
-
-  const saveW = () => {
-    onUpdate(decision.id, { debts:w.debts, cost, hours, hourRate:rate, horizons:hor, prob:w.prob, absorb:w.absorb, xv, eff })
-    setSW(true); setEditW(false); setTimeout(() => setSW(false), 2000)
-  }
-  const saveA = () => {
-    onUpdate(decision.id, { phase:a.phase||null, tension:a.tension||null, orient:a.orient, notes:a.notes })
-    setSA(true); setTimeout(() => setSA(false), 2000)
-  }
-
-  return (
-    <div>
-      {/* Header */}
-      <div style={{ display:"flex", alignItems:"center", gap:12, marginBottom:24, flexWrap:"wrap" }}>
-        <button onClick={onBack} style={{ display:"flex", alignItems:"center", gap:7, padding:"8px 15px", background:C.surface, color:C.sub, border:`1px solid ${C.border}`, borderRadius:8, fontSize:14, cursor:"pointer", fontFamily:"inherit", boxShadow:C.sh }}>
-          <ArrowLeft size={14} /> Dashboard
-        </button>
-        <TypeBadge type={decision.type} />
-        {a.phase && <Tag color="blue" text={a.phase} />}
-        {a.orient != null && <Tag color={orientV<45?"green":orientV>55?"blue":"amber"} text={orientLabel(orientV)} />}
-        <span style={{ fontSize:17, fontWeight:700, color:C.text }}>{decision.name}</span>
-      </div>
-
-      <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:20, alignItems:"start" }}>
-
-        {/* Left: Workshop data */}
-        <div>
-          <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:10 }}>
-            <div style={{ fontSize:11, fontWeight:700, color:C.sub, textTransform:"uppercase", letterSpacing:"0.07em" }}>Workshopdata</div>
-            <button onClick={() => setEditW(v => !v)}
-              style={{ display:"flex", alignItems:"center", gap:6, padding:"5px 12px", background:editW?C.raised:C.surface, color:editW?C.text:C.sub, border:`1px solid ${editW?C.borderHi:C.border}`, borderRadius:7, fontSize:12, cursor:"pointer", fontFamily:"inherit", fontWeight:editW?600:400 }}>
-              <Edit2 size={12} />{editW ? "Avbryt" : "Rediger gjeld og xV"}
-            </button>
-          </div>
-
-          {/* Summary */}
-          <Card style={{ padding:18, marginBottom:12 }}>
-            <div style={{ fontSize:17, fontWeight:700, color:C.text, marginBottom:6 }}>{decision.name}</div>
-            {decision.what    && <div style={{ fontSize:13, color:C.sub, marginBottom:6, lineHeight:1.5 }}>{decision.what}</div>}
-            {decision.effect  && <div style={{ fontSize:11, background:C.greenBg, color:C.green, padding:"2px 8px", borderRadius:20, fontWeight:600, display:"inline-flex", alignItems:"center", gap:4, marginBottom:6 }}><Check size={10} />{decision.effect}</div>}
-            {decision.replaces&& <div style={{ fontSize:12, color:C.muted, marginTop:4 }}>Erstatter: <span style={{ color:C.sub }}>{decision.replaces}</span></div>}
-            <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr 1fr", gap:8, marginTop:14 }}>
-              <Stat label="Netto gjeld"     value={(nd>0?"+":"")+nd}                  color={dc}                                   bg={nd<0?C.greenBg:nd>0?C.redBg:C.raised} />
-              <Stat label="Forventet verdi" value={xv>0?"kr "+fmt(xv):"–"}            color={C.green}                              bg={C.greenBg} />
-              <Stat label="xV-effektivitet" value={eff!=null?eff.toFixed(2)+"x":"–"} color={eff>=1?C.green:eff!=null?C.red:C.sub} bg={eff>=1?C.greenBg:eff!=null?C.redBg:C.raised} />
-            </div>
-          </Card>
-
-          {/* Debt: read-only or editable */}
-          <Card style={{ padding:16, marginBottom:editW?12:0 }}>
-            <div style={{ fontSize:11, fontWeight:700, color:C.sub, textTransform:"uppercase", letterSpacing:"0.07em", marginBottom:12 }}>Gjeldsprofil</div>
-            {editW
-              ? DEBTS.map(cat => (
-                  <DebtSlider key={cat.k} cat={cat} value={w.debts[cat.k]||0}
-                    onChange={e => setW(p => ({ ...p, debts:{ ...p.debts, [cat.k]:parseInt(e.target.value) } }))} />
-                ))
-              : sig.length > 0
-                ? sig.map(c => <DebtBar key={c.k} label={c.n} value={w.debts[c.k]} max={mx} />)
-                : <div style={{ fontSize:13, color:C.muted }}>Alle gjeldskategorier er 0.</div>
-            }
-          </Card>
-
-          {/* xV edit form */}
-          {editW && (
-            <Card style={{ padding:18, marginTop:12 }}>
-              <div style={{ fontSize:11, fontWeight:700, color:C.sub, textTransform:"uppercase", letterSpacing:"0.07em", marginBottom:14 }}>xV-verdier</div>
-              <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:10, marginBottom:14 }}>
-                {[
-                  ["Kostnad (kr)",            "cost",     "500 000"],
-                  ["Frigjort (timer/kvartal)","hours",    "160"],
-                  ["Timekostnad (kr/time)",   "hourRate", "1 100"],
-                  ["Tidshorisont (kvartaler)","horizons", "8"],
-                ].map(([label, key, ph]) => (
-                  <div key={key}>
-                    <Lbl t={label} />
-                    <input type="number" style={IS} placeholder={ph} value={w[key]||""}
-                      onChange={e => setW(p => ({ ...p, [key]:e.target.value }))}
-                      onFocus={e => e.target.style.borderColor=C.green}
-                      onBlur={e  => e.target.style.borderColor=C.border} />
-                  </div>
-                ))}
-              </div>
-              {[
-                ["Sannsynlighet for realisering", "prob",   w.prob],
-                ["Organisatorisk absorbsjonsevne","absorb", w.absorb],
-              ].map(([label, key, val]) => (
-                <div key={key} style={{ marginBottom:14 }}>
-                  <div style={{ display:"flex", justifyContent:"space-between", marginBottom:4 }}>
-                    <span style={{ fontSize:13, fontWeight:600, color:C.text }}>{label}</span>
-                    <span style={{ fontSize:13, fontWeight:700, color:val>=0.7?C.green:val>=0.4?C.amber:C.red, background:val>=0.7?C.greenBg:val>=0.4?C.amberBg:C.redBg, padding:"1px 10px", borderRadius:20 }}>{Math.round(val*100)}%</span>
-                  </div>
-                  <input type="range" min="10" max="100" step="5" value={Math.round(val*100)}
-                    onChange={e => setW(p => ({ ...p, [key]:parseInt(e.target.value)/100 }))}
-                    style={{ width:"100%", accentColor:C.green }} />
-                </div>
-              ))}
-              <button onClick={saveW}
-                style={{ width:"100%", display:"flex", alignItems:"center", justifyContent:"center", gap:8, padding:"10px 20px", background:sW?C.green:C.text, color:"#FFF", border:"none", borderRadius:9, fontSize:14, fontWeight:600, cursor:"pointer", fontFamily:"inherit", transition:"background 0.3s" }}>
-                {sW ? <><Check size={14} /> Lagret!</> : <><Check size={14} /> Lagre workshopendringer</>}
-              </button>
-            </Card>
-          )}
-        </div>
-
-        {/* Right: Analyst panel */}
-        <div>
-          <div style={{ fontSize:11, fontWeight:700, color:C.sub, textTransform:"uppercase", letterSpacing:"0.07em", marginBottom:10, display:"flex", alignItems:"center", gap:7 }}>
-            <Edit2 size={13} /> Analytikermodusen
-          </div>
-          <Card style={{ padding:18, display:"flex", flexDirection:"column", gap:16 }}>
-            <div style={{ display:"flex", gap:8, background:C.amberBg, border:`1px solid ${C.amberBd}`, borderRadius:9, padding:"10px 14px", fontSize:12, color:C.amber, lineHeight:1.5 }}>
-              <Info size={13} style={{ flexShrink:0, marginTop:1 }} /> Fyll inn strategiske dimensjoner etter workshopen. Brukes i porteføljematrise og fasekart.
-            </div>
-
-            <div>
-              <Lbl t="Transformasjonsfase" />
-              <select style={IS} value={a.phase} onChange={e => setA(p => ({ ...p, phase:e.target.value }))}>
-                <option value="">Ikke tildelt</option>
-                {PHASES.map(p => <option key={p}>{p}</option>)}
-              </select>
-            </div>
-
-            <div>
-              <Lbl t="Paradoksal spenning" hint="Opanszky & Vollen (2020)" />
-              <select style={IS} value={a.tension} onChange={e => setA(p => ({ ...p, tension:e.target.value }))}>
-                <option value="">Ikke tildelt</option>
-                {TENSIONS.map(x => <option key={x.k} value={x.k}>{x.l} — {x.d}</option>)}
-              </select>
-              {t && <div style={{ fontSize:11, color:C.blue, background:C.blueBg, border:`1px solid ${C.blueBd}`, borderRadius:6, padding:"4px 10px", marginTop:6, display:"inline-block" }}>{t.d}</div>}
-            </div>
-
-            <div style={{ background:C.raised, borderRadius:10, padding:"14px 16px" }}>
-              <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:8 }}>
-                <Lbl t="Strategisk orientering" />
-                <Tag color="blue" text={`Auto: ${orientLabel(auto)}`} />
-              </div>
-              <div style={{ fontSize:11, color:C.muted, marginBottom:10, lineHeight:1.4 }}>Auto-beregnet fra effekttype og gjeldsprofil. Overstyres manuelt her.</div>
-              <div style={{ display:"flex", justifyContent:"space-between", fontSize:12, marginBottom:8 }}>
-                <span style={{ color:orientV<45?C.green:C.muted, fontWeight:orientV<45?700:400 }}>← Exploitasjon</span>
-                <span style={{ fontWeight:700, color:orientV<45?C.green:orientV>55?C.blue:C.amber }}>{orientLabel(orientV)}</span>
-                <span style={{ color:orientV>55?C.blue:C.muted, fontWeight:orientV>55?700:400 }}>Explorasjon →</span>
-              </div>
-              <input type="range" min="0" max="100" step="5" value={orientV} onChange={e => setA(p => ({ ...p, orient:parseInt(e.target.value) }))} style={{ width:"100%", accentColor:orientV<45?C.green:orientV>55?C.blue:C.amber }} />
-              {a.orient != null && (
-                <button onClick={() => setA(p => ({ ...p, orient:null }))} style={{ background:"none", border:"none", color:C.blue, fontSize:11, padding:0, cursor:"pointer", marginTop:6, textDecoration:"underline" }}>Nullstill til auto-beregning</button>
-              )}
-            </div>
-
-            <div>
-              <Lbl t="Analytikerens notater / kontekst" />
-              <textarea style={{ ...IS, height:80, resize:"none" }} value={a.notes} onChange={e => setA(p => ({ ...p, notes:e.target.value }))} placeholder="Legg til organisatoriske observasjoner, politiske motsetninger, eller begrunnelse for fasetildeling..." />
-            </div>
-
-            <button onClick={saveA}
-              style={{ width:"100%", display:"flex", alignItems:"center", justifyContent:"center", gap:8, padding:"12px 20px", background:sA?C.green:C.text, color:"#FFF", border:"none", borderRadius:9, fontSize:14, fontWeight:600, cursor:"pointer", fontFamily:"inherit", transition:"background 0.3s" }}>
-              {sA ? <><Check size={14} /> Porteføljestatus lagret!</> : <><Check size={14} /> Lagre strategiske dimensjoner</>}
-            </button>
-          </Card>
-        </div>
-
-      </div>
-    </div>
-  )
-}
-
-// ── Wizard component ──────────────────────────────────────────────────────────
-function Wizard({ onCancel, onSave }) {
-  const [step, setStep] = useState(1)
-  const [d, setD] = useState({ name:"", type:"tech", what:"", effect:"", replaces:"", debts:emptyD(), cost:"", hours:"", hourRate:"1100", horizons:"8", prob:0.7, absorb:0.6 })
-
-  const nd = netDebt(d.debts)
-  const curType = TYPES[d.type]
-  const effList = EFFECTS[d.type] || []
-
-  const next = () => setStep(s => s + 1)
-  const prev = () => setStep(s => s - 1)
-  const done = () => {
-    const cost = parseFloat(d.cost) || 0
-    const hours = parseFloat(d.hours) || 0
-    const rate = parseFloat(d.hourRate) || 1100
-    const hor = parseFloat(d.horizons) || 8
-    const xv = hours * rate * hor * d.prob * d.absorb
-    const eff = cost > 0 ? xv / cost : null
-    onSave({ ...d, cost, hours, hourRate:rate, horizons:hor, xv, eff, id:Date.now() })
-  }
-
-  return (
-    <Card style={{ maxWidth:640, margin:"0 auto" }}>
-      {/* Header */}
-      <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", padding:"16px 20px", borderBottom:`1px solid ${C.border}`, background:C.raised, borderTopLeftRadius:12, borderTopRightRadius:12 }}>
-        <div style={{ display:"flex", alignItems:"center", gap:8 }}>
-          <div style={{ width:22, height:22, borderRadius:12, background:C.text, color:"#FFF", display:"flex", alignItems:"center", justifyContent:"center", fontSize:11, fontWeight:700 }}>{step}</div>
-          <span style={{ fontSize:14, fontWeight:700, color:C.text }}>
-            {step===1 && "Definer veikartbeslutning"}
-            {step===2 && `Vurder digitale gjeldsfaktorer (${curType?.l})`}
-            {step===3 && "Estimer forventet verdi (xV)"}
-          </span>
-        </div>
-        <span style={{ fontSize:12, color:C.muted }}>Trinn {step} av 3</span>
-      </div>
-
-      <div style={{ padding:"22px 24px" }}>
-        {/* STEP 1: Core details */}
-        {step === 1 && (
-          <div style={{ display:"flex", flexDirection:"column", gap:16 }}>
-            <div>
-              <Lbl t="Beslutningens navn" hint="Kort og beskrivende tittel" />
-              <input type="text" style={IS} placeholder="F.eks. Migrere kjernebank til skyinfrastruktur" value={d.name} onChange={e => setD(p=>({ ...p, name:e.target.value }))} />
-            </div>
-
-            <div>
-              <Lbl t="Type beslutning" hint="Velg den dimensjonen som best beskriver tiltakets kjerne" />
-              <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:10 }}>
-                {Object.entries(TYPES).map(([k,v]) => (
-                  <div key={k} onClick={() => setD(p=>({ ...p, type:k, effect:"" }))}
-                    style={{ padding:"12px 14px", borderRadius:10, border:`1.5px solid ${d.type===k?C.text:C.border}`, background:d.type===k?C.surface:C.raised, cursor:"pointer", transition:"all 0.2s" }}>
-                    <div style={{ display:"flex", alignItems:"center", gap:6, fontSize:14, fontWeight:700, color:C.text }}><span style={{ fontSize:16 }}>{v.e}</span> {v.l}</div>
-                    <div style={{ fontSize:11, color:C.sub, marginTop:4, lineHeight:1.3 }}>{v.desc}</div>
-                  </div>
-                ))}
-              </div>
-            </div>
-
-            <div>
-              <Lbl t="Hva innebærer valget?" hint="Kort operationalisering av tiltaket" />
-              <input type="text" style={IS} placeholder={curType?.ph} value={d.what} onChange={e => setD(p=>({ ...p, what:e.target.value }))} />
-            </div>
-
-            <div>
-              <Lbl t="Primær ønsket effekt" hint="Hvilken verdi eller kapabilitet skal realiseres?" />
-              <select style={IS} value={d.effect} onChange={e => setD(p=>({ ...p, effect:e.target.value }))}>
-                <option value="">Velg en effekt fra rammeverket...</option>
-                {effList.map(e => <option key={e} value={e}>{e}</option>)}
-              </select>
-            </div>
-
-            <div>
-              <Lbl t="Hva erstatter dette? (Valgfritt)" hint="Infrastruktur eller legacy-miljø som fases ut" />
-              <input type="text" style={IS} placeholder="F.eks. Lokale VM-er og manuelle scripts" value={d.replaces} onChange={e => setD(p=>({ ...p, replaces:e.target.value }))} />
-            </div>
-          </div>
-        )}
-
-        {/* STEP 2: Digital Debt sliders */}
-        {step === 2 && (
-          <div>
-            <div style={{ display:"flex", gap:8, background:C.blueBg, border:`1px solid ${C.blueBd}`, borderRadius:9, padding:"10px 14px", fontSize:12, color:C.blue, marginBottom:16, lineHeight:1.5 }}>
-              <Info size={14} style={{ flexShrink:0, marginTop:1 }} />
-              <span>Gjør en tverrfaglig vurdering. **Amortisering (-5 til -1)** betyr at valget betaler ned eksisterende gjeld. **Lån (+1 til +5)** betyr at tiltaket øker belastningen på området.</span>
-            </div>
-
-            <div style={{ maxHeight:340, overflowY:"auto", paddingRight:4, marginBottom:12 }}>
-              {DEBTS.map(cat => (
-                <DebtSlider key={cat.k} cat={cat} value={d.debts[cat.k]||0}
-                  onChange={e => setD(p => ({ ...p, debts:{ ...p.debts, [cat.k]:parseInt(e.target.value) } }))} />
-              ))}
-            </div>
-
-            <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", background:nd<0?C.greenBg:nd>0?C.redBg:C.raised, padding:"12px 16px", borderRadius:10, border:`1px solid ${nd<0?C.greenBd:nd>0?C.redBd:C.border}` }}>
-              <div>
-                <span style={{ fontSize:13, fontWeight:700, color:C.text }}>Samlet netto gjeldsendring:</span>
-                <div style={{ fontSize:11, color:C.sub, marginTop:2 }}>Akkumulert på tvers av alle 9 dimensjoner</div>
-              </div>
-              <span style={{ fontSize:18, fontWeight:800, color:nd<0?C.green:nd>0?C.red:C.sub }}>{nd>0?"+":""}{nd}</span>
-            </div>
-          </div>
-        )}
-
-        {/* STEP 3: Financials / xV */}
-        {step === 3 && (
-          <div style={{ display:"flex", flexDirection:"column", gap:16 }}>
-            <div style={{ display:"flex", gap:8, background:C.greenBg, border:`1px solid ${C.greenBd}`, borderRadius:9, padding:"10px 14px", fontSize:12, color:C.green, lineHeight:1.5 }}>
-              <CheckCircle size={14} style={{ flexShrink:0, marginTop:1 }} />
-              <span>**eXpected Value (xV)** = Frigjorte timer × Timekostnad × Horisont × Sannsynlighet × Absorbsjonsevne. Dette holdes opp mot investeringskostnaden.</span>
-            </div>
-
-            <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:12 }}>
-              <div>
-                <Lbl t="Investeringskostnad (kr)" hint="Initielle prosjektkroner" />
-                <input type="number" style={IS} placeholder="F.eks. 500000" value={d.cost} onChange={e => setD(p=>({ ...p, cost:e.target.value }))} />
-              </div>
-              <div>
-                <Lbl t="Frigjort tid (timer/kvartal)" hint="Estimert kapasitetsgevinst" />
-                <input type="number" style={IS} placeholder="F.eks. 160" value={d.hours} onChange={e => setD(p=>({ ...p, hours:e.target.value }))} />
-              </div>
-              <div>
-                <Lbl t="Timekostnad (kr/time)" hint="Gjennomsnittlig internrate" />
-                <input type="number" style={IS} placeholder="1100" value={d.hourRate} onChange={e => setD(p=>({ ...p, hourRate:e.target.value }))} />
-              </div>
-              <div>
-                <Lbl t="Tidshorisont (kvartaler)" hint="Måleperiode for gevinst" />
-                <input type="number" style={IS} placeholder="8" value={d.horizons} onChange={e => setD(p=>({ ...p, horizons:e.target.value }))} />
-              </div>
-            </div>
-
-            {[
-              ["Sannsynlighet for gevinstrealisering", "prob", d.prob],
-              ["Organisatorisk absorbsjonsevne", "absorb", d.absorb],
-            ].map(([label, key, val]) => (
-              <div key={key}>
-                <div style={{ display:"flex", justifyContent:"space-between", marginBottom:4 }}>
-                  <span style={{ fontSize:13, fontWeight:600, color:C.text }}>{label}</span>
-                  <span style={{ fontSize:13, fontWeight:700, color:val>=0.7?C.green:val>=0.4?C.amber:C.red, background:val>=0.7?C.greenBg:val>=0.4?C.amberBg:C.redBg, padding:"2px 10px", borderRadius:20 }}>{Math.round(val*100)}%</span>
-                </div>
-                <input type="range" min="10" max="100" step="5" value={Math.round(val*100)}
-                  onChange={e => setD(p => ({ ...p, [key]:parseInt(e.target.value)/100 }))}
-                  style={{ width:"100%", accentColor:C.green }} />
-              </div>
-            ))}
-          </div>
-        )}
-      </div>
-
-      {/* Footer Actions */}
-      <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", padding:"14px 20px", borderTop:`1px solid ${C.border}`, background:C.raised, borderBottomLeftRadius:12, borderBottomRightRadius:12 }}>
-        <button onClick={onCancel} style={{ background:"none", border:"none", color:C.sub, fontSize:13, cursor:"pointer", textDecoration:"underline", fontFamily:"inherit" }}>Avbryt</button>
-        <div style={{ display:"flex", gap:10 }}>
-          {step > 1 && (
-            <button onClick={prev} style={{ display:"flex", alignItems:"center", gap:6, padding:"8px 16px", background:C.surface, color:C.text, border:`1px solid ${C.border}`, borderRadius:8, fontSize:13, fontWeight:600, cursor:"pointer", fontFamily:"inherit" }}>
-              <ArrowLeft size={14} /> Forrige
-            </button>
-          )}
-          {step < 3 ? (
-            <DarkBtn onClick={next} disabled={step===1 && !d.name}>
-              Neste trinn <ArrowRight size={14} />
-            </DarkBtn>
-          ) : (
-            <GreenBtn onClick={done}>
-              <Check size={14} /> Fullfør og lagre valg
-            </GreenBtn>
-          )}
-        </div>
-      </div>
-    </Card>
-  )
-}
-
-// ── Dashboard component ───────────────────────────────────────────────────────
-function Dashboard({ decisions, onNew, onDelete, onOpen }) {
-  const tot     = decisions.length
-  const nd      = decisions.reduce((a,b)=>a+netDebt(b.debts), 0)
-  const totalXv = decisions.reduce((a,b)=>a+(b.xv||0), 0)
-  const profile = tot > 0 ? decisions.filter(d => getOrient(d) > 55).length / tot : 0
-
-  const chartData = DEBTS.map(cat => {
-    const sum = decisions.reduce((a,b) => a + (b.debts[cat.k]||0), 0)
-    return { name:cat.s, Gjeld:sum }
-  })
-
-  return (
-    <div style={{ display:"flex", flexDirection:"column", gap:24 }}>
-      {/* Top Bar Stats */}
-      <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr 1fr 1fr", gap:14 }}>
-        <Stat label="Registrerte tiltak" value={tot} sub="I plattformporteføljen" />
-        <Stat label="Netto porteføljegjeld" value={(nd>0?"+":"")+nd} color={nd<0?C.green:nd>0?C.red:C.sub} bg={nd<0?C.greenBg:nd>0?C.redBg:C.raised} sub="Akkumulert verdi" />
-        <Stat label="Samlet xV-verdi" value={totalXv>0?"kr "+fmt(totalXv):"kr 0"} color={C.green} bg={C.greenBg} sub="Forventet realisert verdi" />
-        <Stat label="Ambideksteri-indeks" value={tot>0?Math.round(profile*100)+"% Explore":"0%"} color={C.blue} bg={C.blueBg} sub="Andel explorative tiltak" />
-      </div>
-
-      <div style={{ display:"grid", gridTemplateColumns:"1.4fr 1fr", gap:20, alignItems:"start" }}>
-        {/* Left: Decision list */}
-        <div>
-          <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:12 }}>
-            <div style={{ fontSize:11, fontWeight:700, color:C.sub, textTransform:"uppercase", letterSpacing:"0.07em" }}>Porteføljeoversikt</div>
-            <GreenBtn onClick={onNew}><Plus size={14} /> Ny beslutning</GreenBtn>
-          </div>
-
-          {tot === 0 ? (
-            <Card style={{ padding:"48px 24px", textAlign:"center" }}>
-              <Layers size={32} style={{ color:C.muted, marginBottom:12 }} />
-              <div style={{ fontSize:15, fontWeight:700, color:C.text, marginBottom:4 }}>Ingen beslutninger lagt inn</div>
-              <div style={{ fontSize:13, color:C.muted, maxWidth:360, margin:"0 auto 16px", lineHeight:1.5 }}>Opprett det første infrastrukturtiltaket eller organisasjonsvalget for å beregne digital gjeld og realiserbar verdi.</div>
-              <GreenBtn onClick={onNew}><Plus size={14} /> Kom i gang nå</GreenBtn>
-            </Card>
-          ) : (
-            <div style={{ display:"flex", flexDirection:"column", gap:8 }}>
-              {decisions.map(d => {
-                const cnd = netDebt(d.debts)
-                return (
-                  <div key={d.id} onClick={() => onOpen(d.id)}
-                    style={{ background:C.surface, border:`1px solid ${C.border}`, borderRadius:10, padding:"14px 18px", cursor:"pointer", display:"flex", justifyContent:"space-between", alignItems:"center", transition:"all 0.15s" }}
-                    onMouseEnter={e => { e.currentTarget.style.borderColor=C.borderHi; e.currentTarget.style.boxShadow=C.shMd }}
-                    onMouseLeave={e => { e.currentTarget.style.borderColor=C.border; e.currentTarget.style.boxShadow=C.sh }}>
-                    <div style={{ minWidth:0, flex:1 }}>
-                      <div style={{ display:"flex", alignItems:"center", gap:8, marginBottom:6, flexWrap:"wrap" }}>
-                        <span style={{ fontSize:14, fontWeight:700, color:C.text }}>{d.name}</span>
-                        <TypeBadge type={d.type} />
-                        {d.phase && <Tag color="blue" text={d.phase} />}
-                      </div>
-                      {d.effect && <div style={{ fontSize:11, color:C.sub, whiteSpace:"nowrap", overflow:"hidden", textOverflow:"ellipsis", maxWidth:"90%" }}>🎯 {d.effect}</div>}
+                        {decisions.map(d => {
+                            const o = getOrient(d);
+                            const nd = netDebt(d.debts);
+                            const xPct = o;
+                            const yPct = 50 - (nd / maxAbs) * 42;
+                            const [bg,tc,bd] = typeCols[d.type] || typeCols.tech;
+                            return (
+                                <div key={d.id} onClick={() => onOpen(d.id)} title={d.name}
+                                    style={{ position:"absolute", left:`calc(${xPct}% - 44px)`, top:`calc(${yPct}% - 13px)`, background:bg, border:`1px solid ${bd}`, borderRadius:20, padding:"4px 10px", fontSize:11, fontWeight:600, color:tc, whiteSpace:"nowrap", maxWidth:120, overflow:"hidden", textOverflow:"ellipsis", cursor:"pointer", boxShadow:C.sh, zIndex:2 }}>
+                                    {d.name}
+                                </div>
+                            );
+                        })}
                     </div>
-                    <div style={{ display:"flex", alignItems:"center", gap:16, flexShrink:0 }}>
-                      <div style={{ textAlign:"right" }}>
-                        <div style={{ fontSize:13, fontWeight:700, color:cnd<0?C.green:cnd>0?C.red:C.sub }}>Gjeld: {cnd>0?"+":""}{cnd}</div>
-                        {d.eff != null && <div style={{ fontSize:11, color:C.muted, marginTop:2 }}>xV: {d.eff.toFixed(1)}x</div>}
-                      </div>
-                      <button onClick={e => { e.stopPropagation(); onDelete(d.id) }} style={{ background:"none", border:"none", color:C.muted, cursor:"pointer", padding:4, borderRadius:4 }} onMouseEnter={e=>e.currentTarget.style.color=C.red} onMouseLeave={e=>e.currentTarget.style.color=C.muted}><Trash2 size={14} /></button>
-                      <ChevronRight size={16} style={{ color:C.muted }} />
+                </div>
+            );
+        }
+
+        // ── Roadmap ───────────────────────────────────────────────────────────
+        function Roadmap({ decisions, onOpen }) {
+            if (!decisions.length) return <div style={{ padding:"48px 0", textAlign:"center", color:C.muted, fontSize:14 }}>Legg til valg for å se fasekartet.</div>;
+            const phaseColors = { Assimilering:[C.blue,C.blueBg,C.blueBd], Rekonstruksjon:[C.amber,C.amberBg,C.amberBd], Materialisering:[C.green,C.greenBg,C.greenBd] };
+
+            return (
+                <div style={{ padding:"20px 22px" }}>
+                    <div style={{ fontSize:13, fontWeight:700, color:C.text, marginBottom:4 }}>Fasekart — veikart for ledelsen</div>
+                    <div style={{ fontSize:12, color:C.sub, marginBottom:12 }}>Tildel fase til hvert valg i analytikermodusen.</div>
+                    <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr 1fr", gap:12 }}>
+                        {PHASES.map((phase, i) => {
+                            const list = decisions.filter(d => d.phase === phase);
+                            const [tc, bg, bd] = phaseColors[phase] || [C.blue, C.blueBg, C.blueBd];
+                            return (
+                                <div key={phase}>
+                                    <div style={{ background:bg, border:`1px solid ${bd}`, borderRadius:10, padding:"10px 14px", marginBottom:8 }}>
+                                        <div style={{ fontSize:13, fontWeight:700, color:tc }}>{i+1}. {phase}</div>
+                                    </div>
+                                    {list.map(d => (
+                                        <div key={d.id} onClick={() => onOpen(d.id)} style={{ background:C.surface, border:`1px solid ${C.border}`, borderRadius:9, padding:"11px 13px", cursor:"pointer", marginBottom:7 }}>
+                                            <div style={{ fontSize:13, fontWeight:600, color:C.text, marginBottom:5 }}>{d.name}</div>
+                                            <TypeBadge type={d.type} />
+                                        </div>
+                                    ))}
+                                </div>
+                            );
+                        })}
                     </div>
-                  </div>
-                )
-              })}
-            </div>
-          )}
-        </div>
+                </div>
+            );
+        }
 
-        {/* Right: Aggregate Debt Chart */}
-        <div>
-          <Lbl t="Akkumulert gjeldsprofil" hint="Samlet digital gjeld fordelt på de 9 kjernefaktorene" />
-          <Card style={{ padding:"18px 12px 10px" }}>
-            {tot === 0 ? (
-              <div style={{ height:200, display:"flex", alignItems:"center", justifyContent:"center", color:C.muted, fontSize:13 }}>Ingen data tilgjengelig</div>
-            ) : (
-              <div style={{ width:"100%", height:210 }}>
-                <ResponsiveContainer>
-                  <BarChart data={chartData} margin={{ top:5, right:5, left:-25, bottom:5 }}>
-                    <XAxis dataKey="name" stroke={C.sub} fontSize={10} tickLine={false} />
-                    <YAxis stroke={C.sub} fontSize={10} tickLine={false} />
-                    <Tooltip content={<ChartTT />} cursor={{ fill:C.raised }} />
-                    <Bar dataKey="Gjeld">
-                      {chartData.map((entry, idx) => (
-                        <Cell key={`cell-${idx}`} fill={entry.Gjeld < 0 ? C.green : entry.Gjeld > 0 ? C.red : C.muted} />
-                      ))}
-                    </Bar>
-                  </BarChart>
-                </ResponsiveContainer>
-              </div>
-            )}
-          </Card>
-        </div>
-      </div>
+        // ── Detail / Analytiker ───────────────────────────────────────────────
+        function Detail({ decision, onBack, onUpdate }) {
+            const [a, setA] = useState({ phase:decision.phase||"", tension:decision.tension||"", orient:decision.orient??null, notes:decision.notes||"" });
+            
+            const saveA = () => {
+                onUpdate(decision.id, { phase:a.phase||null, tension:a.tension||null, orient:a.orient, notes:a.notes });
+                onBack();
+            };
 
-      {/* Tabs / Sub-views for Porteføljematrise & Fasekart */}
-      <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:20 }}>
-        <Card><Matrix decisions={decisions} onOpen={onOpen} /></Card>
-        <Card><Roadmap decisions={decisions} onOpen={onOpen} /></Card>
-      </div>
-    </div>
-  )
-}
+            return (
+                <div>
+                    <button onClick={onBack} style={{ display:"flex", alignItems:"center", gap:7, padding:"8px 15px", background:C.surface, color:C.sub, border:`1px solid ${C.border}`, borderRadius:8, fontSize:14, cursor:"pointer", marginBottom:20 }}><Icon name="arrow-left" size={14}/> Dashboard</button>
+                    <h2>{decision.name}</h2>
+                    <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:20 }}>
+                        <Card style={{ padding:18 }}>
+                            <h4>Analytikermodusen</h4>
+                            <Lbl t="Transformasjonsfase" />
+                            <select style={{...IS, marginBottom:15}} value={a.phase} onChange={e => setA(p => ({ ...p, phase:e.target.value }))}>
+                                <option value="">Ikke tildelt</option>
+                                {PHASES.map(p => <option key={p}>{p}</option>)}
+                            </select>
+                            
+                            <Lbl t="Paradoksal spenning" />
+                            <select style={{...IS, marginBottom:15}} value={a.tension} onChange={e => setA(p => ({ ...p, tension:e.target.value }))}>
+                                <option value="">Ikke tildelt</option>
+                                {TENSIONS.map(x => <option key={x.k} value={x.k}>{x.l} — {x.d}</option>)}
+                            </select>
 
-// ── Main Tool Export ──────────────────────────────────────────────────────────
-export default function PlatformDebtTool() {
-  const [view, setView] = useState("dashboard")
-  const [selectedId, setSelectedId] = useState(null)
-  const [decisions, setDecisions] = useState([
-    {
-      id:1, name:"Standardisert CI/CD via GitHub Actions", type:"process",
-      what:"Etablere felles templates for sky-pipelines", effect:"Redusert manuelt arbeid", replaces:"Manuelle Jenkins-jobber og scripts",
-      debts:{ ideology:0, competence:-2, working_env:-3, user_sat:-1, reputation:-1, infra:-2, shadow_it:-2, technical:-3, governance:-1 },
-      cost:150000, hours:120, hourRate:1100, horizons:8, prob:0.9, absorb:0.8, xv:608256, eff:4.06,
-      phase:"Assimilering", tension:"knowledge", orient:25, notes:"Veldig viktig tiltak for å rydde opp i kognitiv belastning og standardisere leveranseflyten."
-    },
-    {
-      id:2, name:"Egenutviklet IDP (Internal Developer Portal)", type:"design",
-      what:"Bygge Backstage-portal for provisjonering", effect:"Muliggjør ny kapabilitet", replaces:"Jira-skjemaer og manuelle bestillinger",
-      debts:{ ideology:2, competence:3, working_env:-4, user_sat:-3, reputation:1, infra:1, shadow_it:-3, technical:2, governance:1 },
-      cost:900000, hours:350, hourRate:1100, horizons:12, prob:0.6, absorb:0.5, xv:1386000, eff:1.54,
-      phase:"Rekonstruksjon", tension:"sourcing", orient:80, notes:"IDP-en vil gi massiv gevinst på sikt, men krever tung investering i intern kompetanse under Rekonstruksjonsfasen."
-    }
-  ])
+                            <button onClick={saveA} style={{ width:"100%", padding:"10px", background:C.green, color:"#FFF", border:"none", borderRadius:8, cursor:"pointer", fontWeight:600 }}><Icon name="check" size={14}/> Lagre dimensjoner</button>
+                        </Card>
+                    </div>
+                </div>
+            );
+        }
 
-  const add = d => { setDecisions(p => [...p, d]); setView("dashboard") }
-  const del = id => setDecisions(p => p.filter(x => x.id !== id))
-  const open = id => { setSelectedId(id); setView("detail") }
-  const update = (id, fields) => {
-    setDecisions(p => p.map(x => x.id === id ? { ...x, ...fields } : x))
-  }
+        // ── Dashboard ─────────────────────────────────────────────────────────
+        function Dashboard({ decisions, onNew, onDelete, onOpen }) {
+            const chartData = DEBTS.map(cat => ({ name:cat.s, Gjeld: decisions.reduce((a,b) => a + (b.debts[cat.k]||0), 0) }));
+            const nd = decisions.reduce((a,b)=>a+netDebt(b.debts), 0);
 
-  const activeD = decisions.find(x => x.id === selectedId)
+            return (
+                <div style={{ display:"flex", flexDirection:"column", gap:24 }}>
+                    <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr 1fr", gap:14 }}>
+                        <Stat label="Registrerte tiltak" value={decisions.length} />
+                        <Stat label="Netto porteføljegjeld" value={(nd>0?"+":"")+nd} color={nd<0?C.green:nd>0?C.red:C.sub} bg={nd<0?C.greenBg:nd>0?C.redBg:C.raised} />
+                        <button onClick={onNew} style={{ background:C.green, color:"#FFF", border:"none", borderRadius:10, fontWeight:600, cursor:"pointer", display:"flex", alignItems:"center", justifyContent:"center", gap:8 }}><Icon name="plus" size={16}/> Ny beslutning</button>
+                    </div>
 
-  return (
-    <div style={{ background:C.bg, minHeight:"100vh", color:C.text, fontFamily:'-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif' }}>
-      <header style={{ background:C.surface, borderBottom:`1px solid ${C.border}`, padding:"13px 24px", display:"flex", alignItems:"center", justifyContent:"space-between", position:"sticky", top:0, zIndex:10, boxShadow:`0 1px 0 ${C.border}` }}>
-        <div style={{ display:"flex", alignItems:"center", gap:10 }}>
-          <div style={{ width:30, height:30, borderRadius:8, background:C.green, display:"flex", alignItems:"center", justifyContent:"center", boxShadow:`0 2px 8px rgba(13,122,86,0.3)` }}>
-            <span style={{ color:"#FFF", fontSize:14, fontWeight:800 }}>P</span>
-          </div>
-          <span style={{ fontSize:15, fontWeight:700, color:C.text, letterSpacing:"-0.01em" }}>Platform Decision Tool</span>
-          <span style={{ fontSize:12, color:C.muted }}>· Digital Debt & xV</span>
-        </div>
-        <div style={{ display:"flex", gap:16, alignItems:"center" }}>
-          {view === "detail" && <Tag color="blue" text="Analytikermodusen" />}
-          <span style={{ fontSize:12, color:C.muted }}>{decisions.length} valg · {new Date().toLocaleDateString("nb-NO",{day:"numeric",month:"long",year:"numeric"})}</span>
-        </div>
-      </header>
-      <main style={{ maxWidth:980, margin:"0 auto", padding:"32px 28px" }}>
-        {view === "dashboard" && <Dashboard decisions={decisions} onNew={() => setView("wizard")} onDelete={del} onOpen={open} />}
-        {view === "wizard"    && <Wizard onCancel={() => setView("dashboard")} onSave={add} />}
-        {view === "detail"    && activeD && <Detail decision={activeD} onBack={() => setView("dashboard")} onUpdate={update} />}
-      </main>
-    </div>
-  )
-}
+                    <div style={{ display:"grid", gridTemplateColumns:"1.4fr 1fr", gap:20 }}>
+                        <div>
+                            {decisions.map(d => (
+                                <div key={d.id} onClick={() => onOpen(d.id)} style={{ background:C.surface, border:`1px solid ${C.border}`, borderRadius:10, padding:"14px 18px", cursor:"pointer", display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:8 }}>
+                                    <div>
+                                        <div style={{ fontWeight:700, marginBottom:6 }}>{d.name}</div>
+                                        <TypeBadge type={d.type} /> {d.phase && <Tag color="blue" text={d.phase} />}
+                                    </div>
+                                    <div style={{ display:"flex", alignItems:"center", gap:16 }}>
+                                        <span style={{ fontWeight:700, color:netDebt(d.debts)>0?C.red:C.green }}>{netDebt(d.debts)>0?"+":""}{netDebt(d.debts)}</span>
+                                        <button onClick={e => { e.stopPropagation(); onDelete(d.id); }} style={{ background:"none", border:"none", cursor:"pointer" }}><Icon name="trash-2" size={16} className="text-muted"/></button>
+                                    </div>
+                                </div>
+                            ))}
+                        </div>
+                        <Card style={{ padding:"18px 12px" }}>
+                            <div style={{ height:210 }}>
+                                <ResponsiveContainer>
+                                    <BarChart data={chartData} margin={{ top:5, right:5, left:-25, bottom:5 }}>
+                                        <XAxis dataKey="name" stroke={C.sub} fontSize={10} tickLine={false} />
+                                        <YAxis stroke={C.sub} fontSize={10} tickLine={false} />
+                                        <Tooltip content={<ChartTT />} cursor={{ fill:C.raised }} />
+                                        <Bar dataKey="Gjeld">
+                                            {chartData.map((entry, idx) => <Cell key={idx} fill={entry.Gjeld < 0 ? C.green : entry.Gjeld > 0 ? C.red : C.muted} />)}
+                                        </Bar>
+                                    </BarChart>
+                                </ResponsiveContainer>
+                            </div>
+                        </Card>
+                    </div>
+
+                    <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:20 }}>
+                        <Card><Matrix decisions={decisions} onOpen={onOpen} /></Card>
+                        <Card><Roadmap decisions={decisions} onOpen={onOpen} /></Card>
+                    </div>
+                </div>
+            );
+        }
+
+        // ── Wizard (Opprett nytt) ─────────────────────────────────────────────
+        function Wizard({ onCancel, onSave }) {
+            const [d, setD] = useState({ name:"", type:"tech", debts:emptyD() });
+            
+            return (
+                <Card style={{ maxWidth:640, margin:"0 auto", padding:24 }}>
+                    <h3>Opprett nytt tiltak</h3>
+                    <Lbl t="Navn" />
+                    <input type="text" style={{...IS, marginBottom:16}} value={d.name} onChange={e => setD({...d, name:e.target.value})} />
+                    
+                    <Lbl t="Gjeldskonfigurasjon (-5 til +5)" />
+                    {DEBTS.map(cat => (
+                        <div key={cat.k} style={{ marginBottom:10 }}>
+                            <div style={{ display:"flex", justifyContent:"space-between", fontSize:12 }}>
+                                <span>{cat.n}</span><span style={{ fontWeight:700 }}>{d.debts[cat.k] || 0}</span>
+                            </div>
+                            <input type="range" min="-5" max="5" value={d.debts[cat.k] || 0} onChange={e => setD({...d, debts:{...d.debts, [cat.k]:parseInt(e.target.value)}})} style={{ width:"100%" }} />
+                        </div>
+                    ))}
+                    
+                    <div style={{ display:"flex", gap:10, marginTop:20 }}>
+                        <button onClick={onCancel} style={{ flex:1, padding:10, background:C.raised, border:"none", borderRadius:8 }}>Avbryt</button>
+                        <button onClick={() => onSave({...d, id:Date.now()})} style={{ flex:1, padding:10, background:C.green, color:"#FFF", border:"none", borderRadius:8 }}>Lagre tiltak</button>
+                    </div>
+                </Card>
+            );
+        }
+
+        // ── Hovedapplikasjon (inkl. LocalStorage) ─────────────────────────────
+        function PlatformDebtTool() {
+            const [view, setView] = useState("dashboard");
+            const [selectedId, setSelectedId] = useState(null);
+            
+            // Last inn fra nettleserens lagring
+            const [decisions, setDecisions] = useState(() => {
+                const saved = localStorage.getItem("platform_decisions_v2");
+                if (saved) return JSON.parse(saved);
+                return [
+                    { id: 1, name: "CI/CD Pipeline", type: "process", phase: "Assimilering", debts: { ideology: 0, competence: -2, working_env: -3, user_sat: -1, reputation: -1, infra: -2, shadow_it: -2, technical: -3, governance: -1 } }
+                ];
+            });
+
+            // Lagre til nettleseren ved endring
+            useEffect(() => { localStorage.setItem("platform_decisions_v2", JSON.stringify(decisions)); }, [decisions]);
+
+            const add = d => { setDecisions([...decisions, d]); setView("dashboard"); };
+            const del = id => setDecisions(decisions.filter(x => x.id !== id));
+            const open = id => { setSelectedId(id); setView("detail"); };
+            const update = (id, fields) => setDecisions(decisions.map(x => x.id === id ? { ...x, ...fields } : x));
+
+            const activeD = decisions.find(x => x.id === selectedId);
+
+            return (
+                <div style={{ background:C.bg, minHeight:"100vh" }}>
+                    <header style={{ background:C.surface, borderBottom:`1px solid ${C.border}`, padding:"13px 24px", display:"flex", alignItems:"center", gap:10 }}>
+                        <div style={{ width:30, height:30, borderRadius:8, background:C.green, display:"flex", alignItems:"center", justifyContent:"center" }}>
+                            <span style={{ color:"#FFF", fontSize:14, fontWeight:800 }}>P</span>
+                        </div>
+                        <span style={{ fontSize:15, fontWeight:700 }}>Platform Decision Tool</span>
+                    </header>
+                    <main style={{ maxWidth:980, margin:"0 auto", padding:"32px 28px" }}>
+                        {view === "dashboard" && <Dashboard decisions={decisions} onNew={() => setView("wizard")} onDelete={del} onOpen={open} />}
+                        {view === "wizard"    && <Wizard onCancel={() => setView("dashboard")} onSave={add} />}
+                        {view === "detail"    && activeD && <Detail decision={activeD} onBack={() => setView("dashboard")} onUpdate={update} />}
+                    </main>
+                </div>
+            );
+        }
+
+        const root = ReactDOM.createRoot(document.getElementById('root'));
+        root.render(<PlatformDebtTool />);
+    </script>
+</body>
+</html>
