@@ -4,406 +4,296 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Platform Decision Tool</title>
-    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://unpkg.com/react@18/umd/react.production.min.js" crossorigin></script>
+    <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js" crossorigin></script>
+    <script src="https://unpkg.com/prop-types@15.8.1/prop-types.min.js"></script>
+    <script src="https://unpkg.com/recharts@2.12.7/umd/Recharts.js"></script>
+    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+    <script src="https://unpkg.com/lucide@0.379.0/dist/umd/lucide.min.js"></script>
     <style>
-        input[type="range"] { accent-color: #0D7A56; }
+        body { margin: 0; padding: 0; background-color: #F4F3EF; color: #1A1917; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; }
     </style>
 </head>
-<body class="bg-[#F5F4F0] text-[#1C1B18] antialiased min-h-screen flex flex-col">
+<body>
+    <div id="root"></div>
 
-    <header class="bg-white border-b border-gray-200 px-6 py-3.5 flex justify-between items-center sticky top-0 z-10 shadow-sm">
-        <div class="flex items-center gap-2.5">
-            <div class="w-7 h-7 rounded-lg bg-[#0D7A56] flex items-center justify-center text-white font-black text-sm shadow-sm">P</div>
-            <div>
-                <span class="font-bold text-gray-800 text-sm tracking-tight block">Platform Decision Tool</span>
-                <span class="text-[10px] text-gray-400 font-medium block -mt-0.5">Sopra Steria Transformation</span>
-            </div>
-        </div>
-        <div id="header-badge" class="text-[11px] font-bold text-gray-400 bg-gray-50 border border-gray-100 rounded-full px-3 py-1">
-            0 aktive valg
-        </div>
-    </header>
+    <script type="text/babel">
+        // Definerer komponenter fra bibliotekene
+        const { useState, useEffect } = React;
+        const { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Cell } = Recharts;
 
-    <main class="max-w-5xl w-full mx-auto px-6 py-8 flex-1" id="main-content">
-        </main>
+        // Farger og stiler
+        const C = {
+            bg:"#F4F3EF", surface:"#FFFFFF", raised:"#EDECEA", border:"#DDD9D0", borderHi:"#C4C0B6",
+            text:"#1A1917", sub:"#5C5B54", muted:"#9A9890",
+            green:"#0D7A56", greenBg:"#E6F5EE", greenBd:"#A8DCC4",
+            red:"#B83820",   redBg:"#FDF0EC",   redBd:"#F0B8A4",
+            amber:"#8C6200", amberBg:"#FDF6E0", amberBd:"#E8CC7A",
+            blue:"#1856A0",  blueBg:"#EBF2FF",  blueBd:"#A8C4F0",
+            sh:"0 1px 3px rgba(0,0,0,0.07)", shMd:"0 4px 12px rgba(0,0,0,0.09)",
+        };
 
-    <script>
-        // ─── STATE & CONSTANTS ────────────────────────────────────────────────────────
-        let view = "dashboard"; // eller "wizard"
-        let currentStep = 0;
-        let decisions = JSON.parse(localStorage.getItem("platform_decisions")) || [];
-
-        const DEBT_CATEGORIES = [
-          { key:"ideology",    name:"Ideologi",         desc:"Teknologibias og leverandørpreferanser som skaper sub-optimale path-dependencies", q:"Er valget drevet av teknisk modenhet, eller av interne preferanser for kjente leverandører?" },
-          { key:"competence",  name:"Kompetanse",        desc:"Intern vs. ekstern kompetanse, opplæringsbehov og kognitiv belastning (Team Topologies)", q:"Frigjør eller krever valget intern spesialistkompetanse? Øker det teamets kognitive belastning?" },
-          { key:"working_env", name:"Arbeidsmiljø",      desc:"Kultur, DevEx og organisatorisk absorbsjonsevne", q:"Forbedrer valget utvikleropplevelsen (DevEx)? Reduserer det friksjon i hverdagen?" },
-          { key:"user_sat",    name:"Brukertilfredshet", desc:"Sluttbrukernes opplevelse av IT-leveransen", q:"Påvirker valget sluttbrukernes arbeidsflyt positivt eller negativt?" },
-          { key:"reputation",  name:"Omdømme",           desc:"Intern tillit til IT-funksjonen og leveranseevne over tid", q:"Styrker valget tilliten til plattformteamet, eller skaper det ny skepsis?" },
-          { key:"infra",       name:"Infrastruktur",     desc:"Driftsintensitet, IaC-gjeld, lock-in og fremtidig endringsevne", q:"Reduserer valget driftsoverhead? Skaper det ny vendor lock-in?" },
-          { key:"shadow_it",   name:"Shadow IT",         desc:"Desentraliserte investeringer og workarounds utenfor plattformens kontroll", q:"Reduserer valget behovet for workarounds, eller driver det nye desentraliserte løsninger?" },
-          { key:"technical",   name:"Teknisk gjeld",     desc:"Dokumentasjon, automatisering, IaC-drift og vedlikeholdskostnader", q:"Er løsningen kodifisert i IaC? Reduserer den fremtidig vedlikeholdskostnad?" },
-          { key:"governance",  name:"Governance",        desc:"Beslutningsstrukturer, compliance-overhead og kontrollmekanismer", q:"Forenkler valget godkjenningsprosesser, eller legger det til nye kontrollkrav?" }
-        ];
-
-        const TENSIONS = [
-          { key:"alignment", label:"Alignment",   desc:"Forretningstransformasjon ↔ Medarbeidertransformasjon" },
-          { key:"change",    label:"Endring",      desc:"Radikal innovasjon ↔ Inkrementell innovasjon" },
-          { key:"knowledge", label:"Kunnskap",     desc:"Anskaffe ny kompetanse ↔ Vedlikeholde eksisterende" },
-          { key:"delivery",  label:"Leveranse",    desc:"Ny infrastruktur ↔ Legacy-miljø" },
-          { key:"sourcing",  label:"Sourcing",     desc:"Ekstern anskaffelse ↔ Intern utvikling" },
-          { key:"risk",      label:"Risiko",       desc:"Innovasjon og eksperimentering ↔ Compliance og kontroll" },
-          { key:"objective", label:"Målsetting",   desc:"Ny digital kapabilitet ↔ Digital infrastruktur" },
-          { key:"value",     label:"Verdiskaping", desc:"Kundeverdi ↔ Aksjonærverdi" },
-          { key:"agenda",    label:"Agenda",       desc:"Digital transformasjon ↔ Digitalisering" }
-        ];
-
-        let wizardData = {};
-        function resetWizard() {
-            wizardData = {
-                name: "", type: "tech", phase: "Assimilering", what: "", effect: "", replaces: "", tension: "", orient: 50,
-                debts: { ideology:0, competence:0, working_env:0, user_sat:0, reputation:0, infra:0, shadow_it:0, technical:0, governance:0 },
-                cost: "", hours: "", hourRate: 1100, horizons: 8, prob: 0.7, absorb: 0.6
-            };
-            currentStep = 0;
-        }
-
-        // ─── HELPER FUNCTIONS ────────────────────────────────────────────────────────
+        const IS = { width:"100%", background:"#FFFFFF", border:"1.5px solid #DDD9D0", borderRadius:8, padding:"9px 12px", color:"#1A1917", fontSize:14, outline:"none", boxSizing:"border-box", fontFamily:"inherit" };
         const fmt = n => Math.round(n).toLocaleString("nb-NO");
-        function saveToStorage() { localStorage.setItem("platform_decisions", JSON.stringify(decisions)); }
+        const emptyD = () => ({ ideology:0, competence:0, working_env:0, user_sat:0, reputation:0, infra:0, shadow_it:0, technical:0, governance:0 });
+        const netDebt = d => Object.values(d||{}).reduce((a,b)=>a+b, 0);
+        const orientLabel = v => v<30?"Primært exploitasjon":v<45?"Overvekt exploitasjon":v<=55?"Balansert":v<70?"Overvekt explorasjon":"Primært explorasjon";
 
-        // ─── RENDER LOGIC ────────────────────────────────────────────────────────────
-        function render() {
-            document.getElementById("header-badge").innerText = `${decisions.length} aktive valg i nettleseren`;
-            const main = document.getElementById("main-content");
+        const DEBTS = [
+            {k:"ideology",    n:"Ideologi",         s:"Ideologi",    d:"Teknologibias og leverandørpreferanser"},
+            {k:"competence",  n:"Kompetanse",        s:"Kompetanse",  d:"Kompetanse, opplæring og kognitiv belastning"},
+            {k:"working_env", n:"Arbeidsmiljø",      s:"Arbeidsmiljø",d:"Kultur, DevEx og absorbsjonsevne"},
+            {k:"user_sat",    n:"Brukertilfredshet", s:"Brukertilf.", d:"Sluttbrukernes opplevelse av IT-leveransen"},
+            {k:"reputation",  n:"Omdømme",           s:"Omdømme",     d:"Tillit til IT-funksjonen over tid"},
+            {k:"infra",       n:"Infrastruktur",     s:"Infra",       d:"Driftsintensitet, IaC-gjeld og lock-in"},
+            {k:"shadow_it",   n:"Shadow IT",         s:"Shadow IT",   d:"Workarounds utenfor plattformens kontroll"},
+            {k:"technical",   n:"Teknisk gjeld",     s:"Teknisk",     d:"Dokumentasjon, automatisering og vedlikehold"},
+            {k:"governance",  n:"Governance",        s:"Governance",  d:"Beslutningsstrukturer og compliance-overhead"}
+        ];
+
+        const TYPES = {
+            tech:    { l:"Teknologivalg",    e:"⚙️", desc:"Tekniske løsninger og plattformer", ph:"F.eks. Azure Firewall" },
+            org:     { l:"Organisasjonsvalg",e:"🏗️", desc:"Teamstruktur og kompetansemodell", ph:"F.eks. Plattformteam" },
+            process: { l:"Prosessvalg",      e:"🔄", desc:"Arbeidsmetodikk og leveranse", ph:"F.eks. CI/CD-pipeline" },
+            design:  { l:"Designvalg",       e:"🧩", desc:"Arkitektur og endringsevne", ph:"F.eks. API-first integrasjon" }
+        };
+
+        const EFFECTS = {
+            tech:    ["Reduserer driftsoverhead","Øker automatisering","Frigjør intern kapasitet","Reduserer teknisk gjeld"],
+            org:     ["Sentralisering av beslutninger","Desentralisering / økt autonomi","Redusert kognitiv belastning","Styrket innovasjonsevne"],
+            process: ["Kortere leveransetid","Redusert manuelt arbeid","Bedre compliance-håndtering","Redusert endringsrisiko"],
+            design:  ["Løsere kobling","Bedre skalerbarhet","Økt gjenbruk","Redusert kompleksitet"]
+        };
+
+        const PHASES = ["Assimilering","Rekonstruksjon","Materialisering"];
+        const TENSIONS = [
+            {k:"alignment", l:"Alignment", d:"Forretningstransformasjon ↔ Medarbeidertransformasjon"},
+            {k:"change", l:"Endring", d:"Radikal innovasjon ↔ Inkrementell innovasjon"},
+            {k:"knowledge", l:"Kunnskap", d:"Anskaffe ny kompetanse ↔ Vedlikeholde eksisterende"},
+            {k:"delivery", l:"Leveranse", d:"Ny infrastruktur ↔ Legacy-miljø"},
+            {k:"risk", l:"Risiko", d:"Innovasjon ↔ Compliance og kontroll"}
+        ];
+
+        // Helper for Lucide Ikoner i CDN-versjon
+        const Icon = ({ name, size = 16, style = {}, className = "" }) => {
+            useEffect(() => { lucide.createIcons(); }, [name]);
+            return <i data-lucide={name} style={{ width: size, height: size, display: 'inline-block', ...style }} className={className}></i>;
+        };
+
+        // Hovedkomponent
+        function PlatformDebtTool() {
+            const [view, setView] = useState("dashboard");
+            const [selectedId, setSelectedId] = useState(null);
             
-            if (view === "dashboard") {
-                renderDashboard(main);
-            } else {
-                renderWizard(main);
-            }
-        }
+            // Laster inn fra LocalStorage om det finnes, ellers bruk standard
+            const [decisions, setDecisions] = useState(() => {
+                const saved = localStorage.getItem("platform_decisions");
+                if (saved) return JSON.parse(saved);
+                return [
+                    {
+                        id: "1", name: "Azure Managed Firewall", type: "tech",
+                        what: "Erstatte nåværende manuelle Linux-brannmurer med helforvaltet infrastruktur.",
+                        effect: "Reduserer driftsoverhead", replaces: "Manuelle Linux-brannmurer",
+                        phase: "Assimilering", tension: "risk", orient: null, notes: "Reduserer Toil på sikt.",
+                        debts: { ideology: 1, competence: -1, working_env: -2, user_sat: 0, reputation: 1, infra: -3, shadow_it: -1, technical: -2, governance: 1 },
+                        cost: 450000, hours: 140, hourRate: 1100, horizons: 8, prob: 0.85, absorb: 0.7, xv: 749700, eff: 1.66
+                    }
+                ];
+            });
 
-        function renderDashboard(target) {
-            const totalDebt = decisions.reduce((s,d) => s + Object.values(d.debts).reduce((a,b)=>a+b,0), 0);
-            const totalCap  = decisions.reduce((s,d) => s + (Number(d.hours)||0)*(Number(d.horizons)||1), 0);
-            const totalXV   = decisions.reduce((s,d) => s + (Number(d.xv)||0), 0);
-            const totalCost = decisions.reduce((s,d) => s + (Number(d.cost)||0), 0);
-            const freedKr   = decisions.reduce((s,d) => s + (Number(d.hours)||0)*(Number(d.hourRate)||1100)*(Number(d.horizons)||1), 0);
-            const xvEff     = totalCost > 0 ? totalXV/totalCost : null;
+            // Lagre til LocalStorage hver gang listen endres
+            useEffect(() => {
+                localStorage.setItem("platform_decisions", JSON.stringify(decisions));
+            }, [decisions]);
 
-            let html = `
-                <div class="space-y-6">
-                    <div class="flex justify-between items-start">
-                        <div>
-                            <h1 class="text-3xl font-bold tracking-tight text-gray-900">Platform Decision Tool</h1>
-                            <p class="text-sm text-gray-500 mt-1 max-w-xl">Mål digital gjeld og forventet verdi for plattformvalg. Bruk i workshop for å synliggjøre hva hvert valg koster — og frigjør.</p>
+            const saveNew = form => {
+                const newD = {
+                    ...form, id: Date.now().toString(), phase: null, tension: null, orient: null, notes: "",
+                    cost: "", hours: "", hourRate: 1100, horizons: 8, prob: 0.7, absorb: 0.6, xv: 0, eff: null
+                };
+                setDecisions([...decisions, newD]);
+            };
+
+            const del = id => {
+                setDecisions(decisions.filter(d => d.id !== id));
+                if(selectedId === id) setView("dashboard");
+            };
+
+            const update = (id, fields) => {
+                setDecisions(decisions.map(d => d.id === id ? { ...d, ...fields } : d));
+            };
+
+            const tD = decisions.reduce((s,d) => s + netDebt(d.debts), 0);
+            const tXV = decisions.reduce((s,d) => s + (d.xv||0), 0);
+            const tCost = decisions.reduce((s,d) => s + (d.cost||0), 0);
+            const xvEff = tCost > 0 ? tXV / tCost : null;
+
+            const catTot = {};
+            DEBTS.forEach(d => { catTot[d.k] = 0 });
+            decisions.forEach(d => DEBTS.forEach(c => { catTot[c.k] += (d.debts?.[c.k] || 0) }));
+            const chartData = DEBTS.map(c => ({ name:c.s, verdi:catTot[c.k] }));
+
+            const currentD = decisions.find(d => d.id === selectedId);
+
+            return (
+                <div style={{ minHeight:"100vh", background:C.bg, color:C.text }}>
+                    <header style={{ background:C.surface, borderBottom:`1px solid ${C.border}`, padding:"14px 24px", display:"flex", alignItems:"center", justifyContent:"space-between", boxShadow:C.sh }}>
+                        <div style={{ display:"flex", alignItems:"center", gap:10 }}>
+                            <div style={{ width:30, height:30, borderRadius:8, background:C.green, display:"flex", alignItems:"center", justifyContent:"center" }}>
+                                <span style={{ color:"#FFF", fontSize:14, fontWeight:800 }}>P</span>
+                            </div>
+                            <span style={{ fontSize:15, fontWeight:700 }}>Platform Decision Tool</span>
+                            <span style={{ fontSize:12, color:C.muted }}>· Sky-lagret lokalt</span>
                         </div>
-                        <button onclick="view='wizard'; resetWizard(); render();" class="bg-[#0D7A56] hover:bg-[#0a5e42] text-white px-5 py-2.5 rounded-lg text-sm font-semibold flex items-center gap-2 shadow-sm transition-colors">
-                            ➕ Nytt valg
-                        </button>
-                    </div>
+                        <span style={{ fontSize:12, color:C.muted }}>{decisions.length} valg registrert</span>
+                    </header>
 
-                    <div class="grid grid-cols-1 md:grid-cols-4 gap-4">
-                        <div class="p-5 rounded-xl border border-gray-200 shadow-sm ${totalDebt < 0 ? 'bg-green-50' : totalDebt > 0 ? 'bg-red-50' : 'bg-white'}">
-                            <div class="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Netto gjeld</div>
-                            <div class="text-2xl font-bold mt-1.5 ${totalDebt < 0 ? 'text-green-700' : totalDebt > 0 ? 'text-red-700' : 'text-gray-800'}">${totalDebt > 0 ? "+" : ""}${totalDebt}</div>
-                            <div class="text-xs text-gray-500 mt-1">${totalDebt < 0 ? "Netto amortisering" : totalDebt > 0 ? "Netto gjeldsvekst" : "Nøytral balanse"}</div>
-                        </div>
-                        <div class="bg-white p-5 rounded-xl border border-gray-200 shadow-sm">
-                            <div class="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Frigjort verdi</div>
-                            <div class="text-2xl font-bold text-green-700 mt-1.5">${freedKr > 0 ? "kr " + fmt(freedKr) : "–"}</div>
-                            <div class="text-xs text-gray-500 mt-1">${totalCap > 0 ? fmt(totalCap) + " timer frigjort" : "Ingen data"}</div>
-                        </div>
-                        <div class="bg-white p-5 rounded-xl border border-gray-200 shadow-sm">
-                            <div class="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Forventet verdi (xV)</div>
-                            <div class="text-2xl font-bold text-gray-800 mt-1.5">${totalXV > 0 ? "kr " + fmt(totalXV) : "–"}</div>
-                            <div class="text-xs text-gray-500 mt-1">${xvEff != null ? "Effektivitet: " + xvEff.toFixed(2) + "x" : "Mangler kostnad"}</div>
-                        </div>
-                        <div class="bg-white p-5 rounded-xl border border-gray-200 shadow-sm">
-                            <div class="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Valg registrert</div>
-                            <div class="text-2xl font-bold text-gray-800 mt-1.5">${decisions.length}</div>
-                            <div class="text-xs text-gray-500 mt-1">${totalCost > 0 ? "Total kost: kr " + fmt(totalCost) : "I denne sesjonen"}</div>
-                        </div>
-                    </div>
-
-                    <div class="space-y-3">
-                        <h3 class="text-xs font-bold uppercase tracking-wider text-gray-400">Registrerte plattformvalg</h3>
-            `;
-
-            if (decisions.length === 0) {
-                html += `
-                    <div class="border-2 border-dashed border-gray-200 rounded-xl p-12 text-center bg-white shadow-sm">
-                        <div class="text-3xl mb-2">📁</div>
-                        <h4 class="font-semibold text-gray-700 text-sm">Ingen valg opprettet ennå</h4>
-                        <p class="text-xs text-gray-400 max-w-xs mx-auto mt-1 mb-4">Start arkitektur- og teamdiskusjonen ved å legge til det første valget.</p>
-                        <button onclick="view='wizard'; resetWizard(); render();" class="inline-flex items-center gap-1.5 bg-[#0D7A56] text-white px-4 py-1.5 text-xs font-semibold rounded-lg shadow-sm">➕ Legg til første valg</button>
-                    </div>
-                `;
-            } else {
-                html += `<div class="grid grid-cols-1 md:grid-cols-3 gap-4">`;
-                decisions.forEach(d => {
-                    const nd = Object.values(d.debts).reduce((a,b)=>a+b,0);
-                    const capKr = (Number(d.hours)||0)*(Number(d.hourRate)||1100)*(Number(d.horizons)||1);
-                    const tension = TENSIONS.find(t=>t.key===d.tension);
-                    const badgeStyles = d.type==='tech'?'bg-blue-50 text-blue-700 border-blue-200':d.type==='org'?'bg-purple-50 text-purple-700 border-purple-200':d.type==='process'?'bg-green-50 text-green-700 border-green-200':'bg-amber-50 text-amber-700 border-amber-200';
-                    const typeLabels = {tech:'Teknologivalg', org:'Organisasjonsvalg', process:'Prosessvalg', design:'Designvalg'};
-
-                    html += `
-                        <div class="bg-white border border-gray-200 rounded-xl shadow-sm overflow-hidden flex flex-col justify-between">
-                            <div class="p-4 space-y-3">
-                                <div class="flex justify-between items-center">
-                                    <span class="text-[11px] px-2.5 py-0.5 rounded-full font-semibold border ${badgeStyles}">${typeLabels[d.type]}</span>
-                                    <div class="flex items-center gap-2">
-                                        <span class="text-[10px] text-gray-400 font-medium">${d.phase}</span>
-                                        <button onclick="deleteDecision(${d.id})" class="text-gray-300 hover:text-red-600 p-0.5 transition-colors">🗑️</button>
+                    <main style={{ maxWidth:980, margin:"0 auto", padding:"32px 28px" }}>
+                        {view === "dashboard" && (
+                            <div>
+                                <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr 1fr 1fr", gap:14, marginBottom:24 }}>
+                                    <div style={{ background:C.surface, padding:14, borderRadius:10, border:`1px solid ${C.border}` }}>
+                                        <div style={{ fontSize:10, fontWeight:700, color:C.muted }}>ANTALL VALG</div>
+                                        <div style={{ fontSize:18, fontWeight:700 }}>{decisions.length}</div>
+                                    </div>
+                                    <div style={{ background:tD>0?C.redBg:C.greenBg, padding:14, borderRadius:10, border:`1px solid ${C.border}` }}>
+                                        <div style={{ fontSize:10, fontWeight:700, color:C.muted }}>AKKUMULERT GJELD</div>
+                                        <div style={{ fontSize:18, fontWeight:700, color:tD>0?C.red:C.green }}>{(tD>0?"+":"")+tD}</div>
+                                    </div>
+                                    <div style={{ background:C.greenBg, padding:14, borderRadius:10, border:`1px solid ${C.border}` }}>
+                                        <div style={{ fontSize:10, fontWeight:700, color:C.muted }}>TOTAL XV VERDI</div>
+                                        <div style={{ fontSize:18, fontWeight:700, color:C.green }}>kr {fmt(tXV)}</div>
+                                    </div>
+                                    <div style={{ background:C.surface, padding:14, borderRadius:10, border:`1px solid ${C.border}` }}>
+                                        <div style={{ fontSize:10, fontWeight:700, color:C.muted }}>EFFEKTIVITET</div>
+                                        <div style={{ fontSize:18, fontWeight:700 }}>{xvEff ? xvEff.toFixed(2)+"x" : "—"}</div>
                                     </div>
                                 </div>
-                                <div>
-                                    <h4 class="font-bold text-gray-900 text-sm leading-tight">${d.name || 'Navnløst valg'}</h4>
-                                    ${d.what ? `<p class="text-xs text-gray-500 mt-1 line-clamp-2">${d.what}</p>` : ''}
-                                </div>
-                                ${d.effect ? `<div class="inline-flex items-center gap-1 bg-green-50 border border-green-100 text-green-700 text-[10px] font-bold px-2 py-0.5 rounded-full">✓ ${d.effect}</div>` : ''}
-                                ${tension ? `<div class="text-[10px] bg-blue-50 text-blue-700 border border-blue-100 px-2 py-0.5 rounded-md inline-block">↔ ${tension.label}</div>` : ''}
-                            </div>
-                            <div class="border-t border-gray-100 grid grid-cols-3 bg-gray-50 text-center text-[11px] divide-x divide-gray-100">
-                                <div class="py-2">
-                                    <div class="text-[9px] text-gray-400 font-bold uppercase">Gjeld</div>
-                                    <div class="font-bold mt-0.5 ${nd>0?'text-red-600':nd<0?'text-green-600':'text-gray-600'}">${nd>0?"+":""}${nd}</div>
-                                </div>
-                                <div class="py-2">
-                                    <div class="text-[9px] text-gray-400 font-bold uppercase">xV-Eff.</div>
-                                    <div class="font-bold mt-0.5 ${d.eff>=1?'text-green-600':d.eff!=null?'text-red-600':'text-gray-400'}">${d.eff!=null?Number(d.eff).toFixed(1)+"x":"–"}</div>
-                                </div>
-                                <div class="py-2">
-                                    <div class="text-[9px] text-gray-400 font-bold uppercase">Frigjort</div>
-                                    <div class="font-bold mt-0.5 text-gray-700">${capKr>0?"kr "+fmt(capKr):"–"}</div>
-                                </div>
-                            </div>
-                        </div>
-                    `;
-                });
-                html += `</div>`;
-            }
-            html += `</div></div>`;
-            target.innerHTML = html;
-        }
 
-        function renderWizard(target) {
-            let stepsHeader = `
-                <div class="space-y-6">
-                    <div class="flex justify-between items-center bg-white border border-gray-200 rounded-xl p-3 shadow-sm">
-                        <button onclick="view='dashboard'; render();" class="text-xs font-semibold text-gray-500 hover:text-gray-700 px-3 py-1.5 border border-gray-200 rounded-lg flex items-center gap-1 bg-white shadow-sm">⬅ Avbryt</button>
-                        <div class="flex items-center gap-1.5 text-xs font-bold text-gray-400">
-                            ${["Beskriv","Gjeld","xV-Analyse","Konklusjon"].map((s,i)=>`
-                                <div class="flex items-center gap-1.5">
-                                    <span class="w-5 h-5 rounded-full flex items-center justify-center text-[10px] ${i===currentStep?'bg-[#0D7A56] text-white':'bg-gray-100 text-gray-400'}">${i+1}</span>
-                                    <span class="${i===currentStep?'text-gray-800':''}">${s}</span>
-                                    ${i<3?'<span class="text-gray-200">/</span>':''}
-                                </div>
-                            `).join('')}
-                        </div>
-                    </div>
-                    <div id="step-form-container">
-            `;
-
-            let stepContent = "";
-            if (currentStep === 0) {
-                stepContent = `
-                    <div class="space-y-5">
-                        <div>
-                            <h3 class="text-xs font-bold text-gray-400 uppercase tracking-wider mb-2">Steg 1 · Kategoriser og beskriv valget</h3>
-                            <div class="grid grid-cols-2 md:grid-cols-4 gap-2.5">
-                                ${[['tech','⚙️','Teknologivalg'],['org','🏗️','Organisasjonsvalg'],['process','🔄','Prosessvalg'],['design','🧩','Designvalg']].map(([k,e,l])=>`
-                                    <button onclick="wizardData.type='${k}'; render();" class="p-3 text-left border rounded-xl transition-all ${wizardData.type===k?'border-green-600 bg-green-50/40 shadow-sm':'border-gray-200 bg-white hover:border-gray-300'}">
-                                        <div class="text-lg mb-1.5">${e}</div>
-                                        <div class="text-xs font-bold text-gray-800">${l}</div>
+                                <div style={{ display:"flex", justifyContent:"space-between", marginBottom:20 }}>
+                                    <h3 style={{ margin:0 }}>Porteføljeoversikt</h3>
+                                    <button onClick={() => setView("wizard")} style={{ background:C.green, color:"#FFF", border:"none", padding:"10px 18px", borderRadius:8, fontWeight:600, cursor:"pointer" }}>
+                                        + Registrer nytt plattformvalg
                                     </button>
-                                `).join('')}
-                            </div>
-                        </div>
+                                </div>
 
-                        <div class="bg-white border border-gray-200 rounded-xl p-5 space-y-4 shadow-sm">
-                            <div>
-                                <label class="text-xs font-bold text-gray-500 uppercase tracking-wider block mb-1">Navn på valget</label>
-                                <input type="text" id="w-name" oninput="wizardData.name=this.value" class="w-full border border-gray-300 rounded-lg p-2 text-xs outline-none focus:border-green-600" value="${wizardData.name}" placeholder="F.eks. Azure Firewall eller Ny teamstruktur">
-                            </div>
-                            <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
-                                <div class="md:col-span-2">
-                                    <label class="text-xs font-bold text-gray-500 uppercase tracking-wider block mb-1">Hva innebærer endringen?</label>
-                                    <textarea id="w-what" oninput="wizardData.what=this.value" class="w-full border border-gray-300 rounded-lg p-2 text-xs h-20 resize-none outline-none focus:border-green-600" placeholder="Beskriv løsningen kort her...">${wizardData.what}</textarea>
+                                <div style={{ display:"grid", gridTemplateColumns:"1fr", gap:20 }}>
+                                    <div style={{ background:C.surface, borderRadius:12, padding:16, border:`1px solid ${C.border}` }}>
+                                        <table style={{ width:"100%", borderCollapse:"collapse", textAlign:"left" }}>
+                                            <thead>
+                                                <tr style={{ borderBottom:`1px solid ${C.border}`, color:C.sub, fontSize:12 }}>
+                                                    <th style={{ padding:10 }}>Navn</th>
+                                                    <th style={{ padding:10 }}>Nettogjeld</th>
+                                                    <th style={{ padding:10 }}>Forventet Verdi (xV)</th>
+                                                    <th style={{ padding:10, width:40 }}></th>
+                                                </tr>
+                                            </thead>
+                                            <tbody>
+                                                {decisions.map(d => (
+                                                    <tr key={d.id} style={{ borderBottom:`1px solid ${C.raised}`, cursor:"pointer" }} onClick={() => { setSelectedId(d.id); setView("detail"); }}>
+                                                        <td style={{ padding:12, fontWeight:600 }}>{d.name}</td>
+                                                        <td style={{ padding:12, fontWeight:700, color:netDebt(d.debts)>0?C.red:C.green }}>{(netDebt(d.debts)>0?"+":"")+netDebt(d.debts)}</td>
+                                                        <td style={{ padding:12, color:C.green, fontWeight:600 }}>kr {fmt(d.xv||0)}</td>
+                                                        <td style={{ padding:12 }} onClick={e => e.stopPropagation()}>
+                                                            <button onClick={() => del(d.id)} style={{ background:"none", border:"none", color:C.muted, cursor:"pointer" }}>
+                                                                <Icon name="trash-2" size={14} />
+                                                            </button>
+                                                        </td>
+                                                    </tr>
+                                                ))}
+                                            </tbody>
+                                        </table>
+                                    </div>
                                 </div>
-                                <div class="space-y-3">
+                            </div>
+                        )}
+
+                        {view === "wizard" && (
+                            <div style={{ background:C.surface, padding:24, borderRadius:12, border:`1px solid ${C.border}`, maxWidth:500, margin:"0 auto" }}>
+                                <h3>Nytt plattformvalg</h3>
+                                <div style={{ marginBottom:14 }}>
+                                    <label style={{ fontSize:12, fontWeight:700 }}>TITTEL</label>
+                                    <input type="text" id="w_name" style={IS} placeholder="F.eks. Ny skyløsning" />
+                                </div>
+                                <div style={{ marginBottom:14 }}>
+                                    <label style={{ fontSize:12, fontWeight:700 }}>TYPE</label>
+                                    <select id="w_type" style={IS}>
+                                        <option value="tech">Teknologivalg</option>
+                                        <option value="org">Organisasjonsvalg</option>
+                                    </select>
+                                </div>
+                                <div style={{ display:"flex", gap:10, marginTop:20 }}>
+                                    <button onClick={() => setView("dashboard")} style={{ flex:1, padding:10, background:C.raised, border:"none", borderRadius:8, cursor:"pointer" }}>Avbryt</button>
+                                    <button onClick={() => {
+                                        const name = document.getElementById("w_name").value;
+                                        const type = document.getElementById("w_type").value;
+                                        if(name) {
+                                            saveNew({ name, type, what: "", effect: "Reduserer driftsoverhead", replaces: "", debts: emptyD() });
+                                            setView("dashboard");
+                                        }
+                                    }} style={{ flex:1, padding:10, background:C.green, color:"#FFF", border:"none", borderRadius:8, cursor:"pointer", fontWeight:600 }}>Lagre</button>
+                                </div>
+                            </div>
+                        )}
+
+                        {view === "detail" && currentD && (
+                            <div style={{ background:C.surface, padding:24, borderRadius:12, border:`1px solid ${C.border}` }}>
+                                <button onClick={() => setView("dashboard")} style={{ marginBottom:14, background:"none", border:"none", color:C.sub, cursor:"pointer", display:"flex", alignItems:"center", gap:6 }}>
+                                    <Icon name="arrow-left" size={14} /> Tilbake til oversikten
+                                </button>
+                                <h2>{currentD.name}</h2>
+                                <p style={{ color:C.sub }}>Type: {currentD.type === "tech" ? "Teknologivalg" : "Organisasjonsvalg"}</p>
+                                <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:20, marginTop:20 }}>
                                     <div>
-                                        <label class="text-xs font-bold text-gray-500 uppercase tracking-wider block mb-1">Fase</label>
-                                        <select id="w-phase" onchange="wizardData.phase=this.value" class="w-full border border-gray-300 rounded-lg p-2 text-xs bg-white">
-                                            <option ${wizardData.phase==='Assimilering'?'selected':''}>Assimilering</option>
-                                            <option ${wizardData.phase==='Rekonstruksjon'?'selected':''}>Rekonstruksjon</option>
-                                            <option ${wizardData.phase==='Materialisering'?'selected':''}>Materialisering</option>
-                                        </select>
+                                        <h4>Gjeldskonfigurasjon (Workshop score)</h4>
+                                        {DEBTS.map(cat => (
+                                            <div key={cat.k} style={{ marginBottom:10 }}>
+                                                <div style={{ display:"flex", justifyContent:"space-between", fontSize:13 }}>
+                                                    <span>{cat.n}</span>
+                                                    <span style={{ fontWeight:700 }}>{currentD.debts[cat.k] || 0}</span>
+                                                </div>
+                                                <input type="range" min="-5" max="5" value={currentD.debts[cat.k] || 0} 
+                                                    onChange={e => {
+                                                        const val = parseInt(e.target.value);
+                                                        const updatedDebts = { ...currentD.debts, [cat.k]: val };
+                                                        update(currentD.id, { debts: updatedDebts });
+                                                    }} style={{ width:"100%" }} />
+                                            </div>
+                                        ))}
                                     </div>
                                     <div>
-                                        <label class="text-xs font-bold text-gray-500 uppercase tracking-wider block mb-1">Primær effekt</label>
-                                        <input type="text" id="w-effect" oninput="wizardData.effect=this.value" class="w-full border border-gray-300 rounded-lg p-2 text-xs outline-none focus:border-green-600" value="${wizardData.effect}" placeholder="F.eks. Redusert driftsoverhead">
-                                    </div>
-                                </div>
-                            </div>
-                            <div>
-                                <label class="text-xs font-bold text-gray-500 uppercase tracking-wider block mb-1">Paradoksal spenning (valgfritt)</label>
-                                <select id="w-tension" onchange="wizardData.tension=this.value" class="w-full border border-gray-300 rounded-lg p-2 text-xs bg-white">
-                                    <option value="">Velg spenning…</option>
-                                    ${TENSIONS.map(t=>`<option value="${t.key}" ${wizardData.tension===t.key?'selected':''}>${t.label} — ${t.desc}</option>`).join('')}
-                                </select>
-                            </div>
-                        </div>
-                    </div>
-                `;
-            } else if (currentStep === 1) {
-                const totalDebt = Object.values(wizardData.debts).reduce((a,b)=>a+b,0);
-                stepContent = `
-                    <div class="space-y-4">
-                        <div class="flex justify-between items-center">
-                            <h3 class="text-xs font-bold text-gray-400 uppercase tracking-wider">Steg 2 · Gjeldsmåling (Konsensus i plenum)</h3>
-                            <span class="text-xs font-bold px-3 py-1 rounded-full ${totalDebt<0?'bg-green-50 text-green-700 border border-green-200':totalDebt>0?'bg-red-50 text-red-700 border border-red-200':'bg-gray-100 text-gray-600'}">Netto: ${totalDebt>0?"+":""}${totalDebt}</span>
-                        </div>
-                        <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
-                            ${DEBT_CATEGORIES.map(cat => {
-                                const val = wizardData.debts[cat.key] || 0;
-                                return `
-                                    <div class="border rounded-xl p-4 bg-white shadow-sm ${val<0?'border-green-200 bg-green-50/10':val>0?'border-red-200 bg-red-50/10':'border-gray-200'}">
-                                        <div class="flex justify-between items-start mb-1">
-                                            <span class="text-xs font-bold text-gray-800">${cat.name}</span>
-                                            <span class="text-xs font-black ${val<0?'text-green-600':val>0?'text-red-600':'text-gray-400'}">${val>0?"+":""}${val}</span>
+                                        <h4>Økonomisk verdiutbytte (xV)</h4>
+                                        <div style={{ marginBottom:12 }}>
+                                            <label style={{ fontSize:12 }}>Implementasjonskostnad (kr)</label>
+                                            <input type="number" value={currentD.cost || ""} onChange={e => {
+                                                const cost = parseFloat(e.target.value) || 0;
+                                                const xv = (currentD.hours || 0) * (currentD.hourRate || 1100) * (currentD.horizons || 8) * (currentD.prob || 0.7) * (currentD.absorb || 0.6);
+                                                update(currentD.id, { cost, xv, eff: cost > 0 ? xv / cost : null });
+                                            }} style={IS} />
                                         </div>
-                                        <p class="text-[11px] text-gray-400 leading-normal mb-3">${cat.desc}</p>
-                                        <input type="range" min="-5" max="5" step="1" value="${val}" oninput="wizardData.debts['${cat.key}']=parseInt(this.value); render();" class="w-full">
-                                        <div class="flex justify-between text-[9px] font-bold text-gray-300 uppercase tracking-wider mt-1"><span>← Amortisering</span><span>Lån →</span></div>
+                                        <div style={{ marginBottom:12 }}>
+                                            <label style={{ fontSize:12 }}>Frigjorte timer pr. kvartal</label>
+                                            <input type="number" value={currentD.hours || ""} onChange={e => {
+                                                const hours = parseFloat(e.target.value) || 0;
+                                                const xv = hours * (currentD.hourRate || 1100) * (currentD.horizons || 8) * (currentD.prob || 0.7) * (currentD.absorb || 0.6);
+                                                update(currentD.id, { hours, xv, eff: (currentD.cost || 0) > 0 ? xv / currentD.cost : null });
+                                            }} style={IS} />
+                                        </div>
+                                        <div style={{ background:C.raised, padding:14, borderRadius:8, marginTop:20 }}>
+                                            <div style={{ fontSize:12, color:C.sub }}>BEREGNET VERDI (xV):</div>
+                                            <div style={{ fontSize:20, fontWeight:700, color:C.green }}>kr {fmt(currentD.xv || 0)}</div>
+                                        </div>
                                     </div>
-                                `;
-                            }).join('')}
-                        </div>
-                    </div>
-                `;
-            } else if (currentStep === 2) {
-                const cost = parseFloat(wizardData.cost) || 0;
-                const hours = parseFloat(wizardData.hours) || 0;
-                const rate = parseFloat(wizardData.hourRate) || 1100;
-                const horizons = parseFloat(wizardData.horizons) || 8;
-                const rawValue = hours * rate * horizons;
-                const xv = rawValue * wizardData.prob * wizardData.absorb;
-                const eff = cost > 0 ? xv / cost : null;
-
-                stepContent = `
-                    <div class="space-y-4">
-                        <h3 class="text-xs font-bold text-gray-400 uppercase tracking-wider">Steg 3 · xV-analyse (Gevinstrealisering)</h3>
-                        <div class="grid grid-cols-1 md:grid-cols-4 gap-3">
-                            <div>
-                                <label class="text-xs font-bold text-gray-500 block mb-1">Implementeringskostnad (kr)</label>
-                                <input type="number" oninput="wizardData.cost=this.value; render();" class="w-full border border-gray-300 rounded-lg p-2 text-xs outline-none focus:border-green-600" value="${wizardData.cost}" placeholder="500000">
-                            </div>
-                            <div>
-                                <label class="text-xs font-bold text-gray-500 block mb-1">Frigjort tid (t/kvartal)</label>
-                                <input type="number" oninput="wizardData.hours=this.value; render();" class="w-full border border-gray-300 rounded-lg p-2 text-xs outline-none focus:border-green-600" value="${wizardData.hours}" placeholder="160">
-                            </div>
-                            <div>
-                                <label class="text-xs font-bold text-gray-500 block mb-1">Timekostnad (kr/t)</label>
-                                <input type="number" oninput="wizardData.hourRate=this.value; render();" class="w-full border border-gray-300 rounded-lg p-2 text-xs outline-none focus:border-green-600" value="${wizardData.hourRate}">
-                            </div>
-                            <div>
-                                <label class="text-xs font-bold text-gray-500 block mb-1">Tidshorisont (kvartaler)</label>
-                                <input type="number" oninput="wizardData.horizons=this.value; render();" class="w-full border border-gray-300 rounded-lg p-2 text-xs outline-none focus:border-green-600" value="${wizardData.horizons}">
-                            </div>
-                        </div>
-
-                        <div class="bg-white border border-gray-200 rounded-xl p-5 shadow-sm space-y-4">
-                            <label class="text-xs font-bold text-gray-500 uppercase tracking-wider block">Strategiske diskonteringsfaktorer</label>
-                            <div>
-                                <div class="flex justify-between text-xs text-gray-700 mb-1"><span>Sannsynlighet for full gevinst</span><b>${Math.round(wizardData.prob*100)}%</b></div>
-                                <input type="range" min="0.1" max="1" step="0.05" value="${wizardData.prob}" oninput="wizardData.prob=parseFloat(this.value); render();" class="w-full">
-                            </div>
-                            <div>
-                                <div class="flex justify-between text-xs text-gray-700 mb-1"><span>Organisatorisk absorbsjonsevne</span><b>${Math.round(wizardData.absorb*100)}%</b></div>
-                                <input type="range" min="0.1" max="1" step="0.05" value="${wizardData.absorb}" oninput="wizardData.absorb=parseFloat(this.value); render();" class="w-full">
-                            </div>
-                        </div>
-
-                        <div class="grid grid-cols-1 md:grid-cols-3 gap-3 text-center">
-                            <div class="bg-white p-4 border border-gray-200 rounded-xl shadow-sm">
-                                <div class="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Ukorrigert Gevinst</div>
-                                <div class="text-lg font-bold text-gray-700 mt-1">${rawValue>0?"kr "+fmt(rawValue):"–"}</div>
-                            </div>
-                            <div class="bg-green-50/50 p-4 border border-green-200 rounded-xl shadow-sm">
-                                <div class="text-[10px] font-bold text-gray-500 uppercase tracking-wider">Forventet Verdi (xV)</div>
-                                <div class="text-lg font-bold text-green-700 mt-1">${xv>0?"kr "+fmt(xv):"–"}</div>
-                            </div>
-                            <div class="p-4 border rounded-xl shadow-sm ${eff>=1?'bg-green-50 border-green-200 text-green-700':'bg-white text-gray-700'}">
-                                <div class="text-[10px] font-bold text-gray-400 uppercase tracking-wider">xV-Effektivitet</div>
-                                <div class="text-lg font-bold mt-1 ${eff && eff<1?'text-red-600':''}">${eff!=null?eff.toFixed(2)+"x":"–"}</div>
-                            </div>
-                        </div>
-                    </div>
-                `;
-            } else if (currentStep === 3) {
-                const nd = Object.values(wizardData.debts).reduce((a,b)=>a+b,0);
-                stepContent = `
-                    <div class="space-y-4">
-                        <h3 class="text-xs font-bold text-gray-400 uppercase tracking-wider">Steg 4 · Workshop Beslutningsgrunnlag</h3>
-                        <div class="bg-white border border-gray-200 rounded-xl p-5 shadow-sm space-y-4">
-                            <div class="flex justify-between items-start border-b border-gray-100 pb-4">
-                                <div>
-                                    <h2 class="text-xl font-bold text-gray-900">${wizardData.name || "Navnløst valg"}</h2>
-                                    <p class="text-xs text-gray-500 mt-1">${wizardData.what || "Ingen beskrivelse lagt til."}</p>
-                                </div>
-                                <div class="p-3 rounded-lg border text-center min-w-[90px] ${nd<0?'bg-green-50 border-green-200 text-green-700':'bg-red-50 border-red-200 text-red-700'}">
-                                    <div class="text-[9px] font-bold uppercase opacity-60">Netto Gjeld</div>
-                                    <div class="text-xl font-black mt-0.5">${nd>0?"+":""}${nd}</div>
                                 </div>
                             </div>
-                            <div class="p-4 rounded-lg text-xs ${nd<=0?'bg-green-50 text-green-800 border border-green-200':'bg-amber-50 text-amber-800 border border-amber-200'}">
-                                ${nd<=0 ? '<b>Strategisk anbefalt:</b> Valget medfører enten gjeldsreduksjon eller er gjeldsnøytralt.' : '<b>Vennligst merk:</b> Dette valget øker den digitale gjelden. Sørg for at teamet har en plan for tilbakebetaling.'}
-                            </div>
-                        </div>
-                    </div>
-                `;
-            }
-
-            let footer = `
-                    </div>
-                    <div class="flex justify-between border-t border-gray-200 pt-4 mt-6">
-                        <button onclick="if(currentStep>0){currentStep--; render();}else{view='dashboard'; render();}" class="text-xs font-semibold border border-gray-300 rounded-lg px-4 py-2 bg-white text-gray-600">⬅ ${currentStep===0?'Avbryt':'Forrige'}</button>
-                        ${currentStep < 3 
-                            ? `<button onclick="currentStep++; render();" ${currentStep===0 && !wizardData.name.trim() ? 'disabled class="opacity-40 text-xs font-semibold bg-[#0D7A56] text-white rounded-lg px-5 py-2"' : 'class="text-xs font-semibold bg-[#0D7A56] hover:bg-[#0a5e42] text-white rounded-lg px-5 py-2"'} >Neste ➡</button>`
-                            : `<button onclick="saveWizardDecision();" class="text-xs font-bold bg-[#0D7A56] hover:bg-[#0a5e42] text-white rounded-lg px-6 py-2">✓ Lagre valg til sesjon</button>`
-                        }
-                    </div>
+                        )}
+                    </main>
                 </div>
-            `;
-
-            target.innerHTML = stepsHeader + stepContent + footer;
+            );
         }
 
-        function saveWizardDecision() {
-            const cost = parseFloat(wizardData.cost) || 0;
-            const hours = parseFloat(wizardData.hours) || 0;
-            const rate = parseFloat(wizardData.hourRate) || 1100;
-            const horizons = parseFloat(wizardData.horizons) || 8;
-            const xv = hours * rate * horizons * wizardData.prob * wizardData.absorb;
-            const eff = cost > 0 ? xv / cost : null;
-
-            const finalDecision = { ...wizardData, cost, hours, hourRate: rate, horizons, xv, eff, id: Date.now() };
-            decisions.push(finalDecision);
-            saveToStorage();
-            view = "dashboard";
-            render();
-        }
-
-        function deleteDecision(id) {
-            decisions = decisions.filter(d => d.id !== id);
-            saveToStorage();
-            render();
-        }
-
-        // START APPLIKASJONEN
-        render();
+        const root = ReactDOM.createRoot(document.getElementById('root'));
+        root.render(<PlatformDebtTool />);
     </script>
 </body>
 </html>
