@@ -1,396 +1,661 @@
 <!DOCTYPE html>
 <html lang="no">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Platform Decision Tool</title>
-    <script src="https://unpkg.com/react@18/umd/react.production.min.js" crossorigin></script>
-    <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js" crossorigin></script>
-    <script src="https://unpkg.com/prop-types@15.8.1/prop-types.min.js"></script>
-    <script src="https://unpkg.com/recharts@2.12.7/umd/Recharts.js"></script>
-    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
-    <script src="https://unpkg.com/lucide@0.379.0/dist/umd/lucide.min.js"></script>
-    <style>
-        body { margin: 0; padding: 0; background-color: #F4F3EF; color: #1A1917; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; }
-    </style>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>Platform Decision Tool</title>
+<script src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+<script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+<script src="https://unpkg.com/recharts@2.12.7/umd/Recharts.js"></script>
+<script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+body{background:#F4F3EF;color:#1A1917;font-family:-apple-system,"Segoe UI",system-ui,sans-serif;font-size:14px}
+input[type=range]{width:100%;height:4px;border-radius:2px;outline:none;-webkit-appearance:none;appearance:none;background:#DDD9D0}
+input[type=range]::-webkit-slider-thumb{-webkit-appearance:none;width:17px;height:17px;border-radius:50%;background:#fff;border:2px solid #0D7A56;cursor:pointer;box-shadow:0 1px 3px rgba(0,0,0,.15)}
+input:focus,select:focus,textarea:focus{border-color:#0D7A56!important;box-shadow:0 0 0 3px rgba(13,122,86,.1)}
+::-webkit-scrollbar{width:6px;height:6px}
+::-webkit-scrollbar-track{background:transparent}
+::-webkit-scrollbar-thumb{background:#C4C0B6;border-radius:3px}
+</style>
 </head>
 <body>
-    <div id="root"></div>
+<div id="root"></div>
+<script type="text/babel">
+const {useState,useEffect} = React;
+const {BarChart,Bar,XAxis,YAxis,Tooltip,ResponsiveContainer,Cell} = Recharts;
 
-    <script type="text/babel">
-        // ── Henter funksjoner fra bibliotekene (erstatter imports) ────────────
-        const { useState, useEffect } = React;
-        const { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Cell } = Recharts;
+// ── Farger ───────────────────────────────────────────────────────────────────
+const C = {
+  bg:"#F4F3EF",surface:"#FFF",raised:"#EDECEA",border:"#DDD9D0",borderHi:"#C4C0B6",
+  text:"#1A1917",sub:"#5C5B54",muted:"#9A9890",
+  green:"#0D7A56",greenBg:"#E6F5EE",greenBd:"#A8DCC4",
+  red:"#B83820",redBg:"#FDF0EC",redBd:"#F0B8A4",
+  amber:"#8C6200",amberBg:"#FDF6E0",amberBd:"#E8CC7A",
+  blue:"#1856A0",blueBg:"#EBF2FF",blueBd:"#A8C4F0",
+  sh:"0 1px 3px rgba(0,0,0,.07)",shMd:"0 4px 12px rgba(0,0,0,.09)"
+};
+const IS = {width:"100%",background:C.surface,border:`1.5px solid ${C.border}`,borderRadius:8,padding:"9px 12px",color:C.text,fontSize:14,outline:"none",boxSizing:"border-box",fontFamily:"inherit"};
+const fmt = n => Math.round(n).toLocaleString("nb-NO");
+const emptyD = () => ({ideology:0,competence:0,working_env:0,user_sat:0,reputation:0,infra:0,shadow_it:0,technical:0,governance:0});
+const netDebt = d => Object.values(d||{}).reduce((a,b)=>a+b,0);
+const orientLabel = v => v<30?"Primært exploitasjon":v<45?"Overvekt exploitasjon":v<=55?"Balansert":v<70?"Overvekt explorasjon":"Primært explorasjon";
 
-        // ── Ikon-hjelper for nettleseren ──────────────────────────────────────
-        const Icon = ({ name, size = 16, style = {}, className = "" }) => {
-            useEffect(() => { if(window.lucide) window.lucide.createIcons(); }, [name]);
-            return <i data-lucide={name} style={{ width: size, height: size, display: 'inline-block', ...style }} className={className}></i>;
-        };
+// ── Ikoner (inline SVG) ──────────────────────────────────────────────────────
+const sw = {fill:"none",stroke:"currentColor",strokeWidth:2,strokeLinecap:"round",strokeLinejoin:"round"};
+const Ico = {
+  Plus:     ({s=16,st={}})=><svg width={s} height={s} viewBox="0 0 24 24" style={{display:"inline-block",...sw,...st}}><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>,
+  Back:     ({s=16,st={}})=><svg width={s} height={s} viewBox="0 0 24 24" style={{display:"inline-block",...sw,...st}}><polyline points="15 18 9 12 15 6"/></svg>,
+  Next:     ({s=16,st={}})=><svg width={s} height={s} viewBox="0 0 24 24" style={{display:"inline-block",...sw,...st}}><polyline points="9 18 15 12 9 6"/></svg>,
+  Check:    ({s=16,st={}})=><svg width={s} height={s} viewBox="0 0 24 24" style={{display:"inline-block",...sw,...st}}><polyline points="20 6 9 17 4 12"/></svg>,
+  Trash:    ({s=16,st={}})=><svg width={s} height={s} viewBox="0 0 24 24" style={{display:"inline-block",...sw,...st}}><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>,
+  Warn:     ({s=16,st={}})=><svg width={s} height={s} viewBox="0 0 24 24" style={{display:"inline-block",...sw,...st}}><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>,
+  OK:       ({s=16,st={}})=><svg width={s} height={s} viewBox="0 0 24 24" style={{display:"inline-block",...sw,...st}}><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg>,
+  Info:     ({s=16,st={}})=><svg width={s} height={s} viewBox="0 0 24 24" style={{display:"inline-block",...sw,...st}}><circle cx="12" cy="12" r="10"/><line x1="12" y1="16" x2="12" y2="12"/><line x1="12" y1="8" x2="12.01" y2="8"/></svg>,
+  Edit:     ({s=16,st={}})=><svg width={s} height={s} viewBox="0 0 24 24" style={{display:"inline-block",...sw,...st}}><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>,
+  Layers:   ({s=32,st={}})=><svg width={s} height={s} viewBox="0 0 24 24" style={{display:"inline-block",...sw,...st}}><polygon points="12 2 2 7 12 12 22 7 12 2"/><polyline points="2 17 12 22 22 17"/><polyline points="2 12 12 17 22 12"/></svg>,
+  Chevron:  ({s=14,st={}})=><svg width={s} height={s} viewBox="0 0 24 24" style={{display:"inline-block",...sw,...st}}><polyline points="9 18 15 12 9 6"/></svg>,
+};
 
-        // ── Farger og stiler ──────────────────────────────────────────────────
-        const C = {
-            bg:"#F4F3EF", surface:"#FFFFFF", raised:"#EDECEA", border:"#DDD9D0", borderHi:"#C4C0B6",
-            text:"#1A1917", sub:"#5C5B54", muted:"#9A9890",
-            green:"#0D7A56", greenBg:"#E6F5EE", greenBd:"#A8DCC4",
-            red:"#B83820",   redBg:"#FDF0EC",   redBd:"#F0B8A4",
-            amber:"#8C6200", amberBg:"#FDF6E0", amberBd:"#E8CC7A",
-            blue:"#1856A0",  blueBg:"#EBF2FF",  blueBd:"#A8C4F0",
-            sh:"0 1px 3px rgba(0,0,0,0.07)", shMd:"0 4px 12px rgba(0,0,0,0.09)",
-        };
+// ── Data ─────────────────────────────────────────────────────────────────────
+const DEBTS = [
+  {k:"ideology",n:"Ideologi",s:"Ideologi",d:"Teknologibias og leverandørpreferanser",q:"Er valget drevet av teknisk modenhet, eller preferanser for kjente leverandører?"},
+  {k:"competence",n:"Kompetanse",s:"Kompetanse",d:"Kompetanse, opplæring og kognitiv belastning",q:"Frigjør valget intern kapasitet, eller krever det ny spesialistkompetanse?"},
+  {k:"working_env",n:"Arbeidsmiljø",s:"Arbeidsmiljø",d:"Kultur, DevEx og absorbsjonsevne",q:"Forbedrer valget utvikleropplevelsen og reduserer friksjon?"},
+  {k:"user_sat",n:"Brukertilfredshet",s:"Brukertilf.",d:"Sluttbrukernes opplevelse",q:"Påvirker valget sluttbrukernes arbeidsflyt positivt?"},
+  {k:"reputation",n:"Omdømme",s:"Omdømme",d:"Tillit til IT-funksjonen over tid",q:"Styrker valget tilliten til plattformteamet?"},
+  {k:"infra",n:"Infrastruktur",s:"Infra",d:"Driftsintensitet, IaC-gjeld og lock-in",q:"Reduserer valget driftsoverhead og vendor lock-in?"},
+  {k:"shadow_it",n:"Shadow IT",s:"Shadow IT",d:"Workarounds utenfor plattformens kontroll",q:"Reduserer valget behovet for desentraliserte workarounds?"},
+  {k:"technical",n:"Teknisk gjeld",s:"Teknisk",d:"Dokumentasjon, automatisering og vedlikehold",q:"Er løsningen kodifisert i IaC og reduserer vedlikeholdskostnad?"},
+  {k:"governance",n:"Governance",s:"Governance",d:"Beslutningsstrukturer og compliance-overhead",q:"Forenkler valget godkjenningsprosesser?"},
+];
+const TYPES = {
+  tech:    {l:"Teknologivalg",    e:"⚙️",desc:"Tekniske løsninger og plattformer",      ph:"F.eks. Azure Firewall — managed cloud-brannmur"},
+  org:     {l:"Organisasjonsvalg",e:"🏗️",desc:"Teamstruktur, ansvar og kompetansemodell",ph:"F.eks. Omstrukturering til plattformteam"},
+  process: {l:"Prosessvalg",      e:"🔄",desc:"Arbeidsmetodikk og leveranseprosess",     ph:"F.eks. CI/CD-pipeline for infrastrukturendringer"},
+  design:  {l:"Designvalg",       e:"🧩",desc:"Arkitektur og langsiktig endringsevne",   ph:"F.eks. Microservices med API-first integrasjonslag"},
+};
+const EFFECTS = {
+  tech:["Reduserer driftsoverhead","Øker automatisering","Frigjør intern kapasitet","Forbedrer integrasjonsevne","Muliggjør ny kapabilitet","Reduserer vendor lock-in","Forbedrer sikkerhet/compliance","Reduserer teknisk gjeld"],
+  org: ["Sentralisering av beslutninger","Desentralisering / økt autonomi","Ny rollestruktur","Redusert kognitiv belastning","Kompetanseoverføring","Outsourcing / insourcing","Bedre IT–forretningsalignment","Styrket innovasjonsevne"],
+  process:["Kortere leveransetid","Redusert manuelt arbeid","Bedre compliance-håndtering","Økt kvalitetssikring","Raskere feilretting (MTTR)","Bedre sporbarhet","Mer forutsigbar leveranse","Redusert endringsrisiko"],
+  design:["Løsere kobling","Bedre skalerbarhet","Økt gjenbruk","Redusert kompleksitet","API-first","Redusert lock-in","Enklere partneronboarding","Bedre fremtidig endringsevne"],
+};
+const TENSIONS = [
+  {k:"alignment",l:"Alignment",d:"Forretningstransformasjon ↔ Medarbeidertransformasjon"},
+  {k:"change",l:"Endring",d:"Radikal innovasjon ↔ Inkrementell innovasjon"},
+  {k:"knowledge",l:"Kunnskap",d:"Anskaffe ny kompetanse ↔ Vedlikeholde eksisterende"},
+  {k:"delivery",l:"Leveranse",d:"Ny infrastruktur ↔ Legacy-miljø"},
+  {k:"sourcing",l:"Sourcing",d:"Ekstern anskaffelse ↔ Intern utvikling"},
+  {k:"risk",l:"Risiko",d:"Innovasjon ↔ Compliance og kontroll"},
+  {k:"objective",l:"Målsetting",d:"Ny digital kapabilitet ↔ Digital infrastruktur"},
+  {k:"value",l:"Verdiskaping",d:"Kundeverdi ↔ Aksjonærverdi"},
+  {k:"agenda",l:"Agenda",d:"Digital transformasjon ↔ Digitalisering"},
+];
+const PHASES = ["Assimilering","Rekonstruksjon","Materialisering"];
+const EXPLOIT_E = ["Reduserer driftsoverhead","Øker automatisering","Kortere leveransetid","Redusert manuelt arbeid","Reduserer teknisk gjeld","Reduserer vendor lock-in","Bedre compliance-håndtering","Mer forutsigbar leveranse","Redusert endringsrisiko"];
+const EXPLORE_E = ["Muliggjør ny kapabilitet","Forbedrer integrasjonsevne","Styrket innovasjonsevne","Løsere kobling","API-first","Enklere partneronboarding","Bedre fremtidig endringsevne","Bedre skalerbarhet"];
+const suggestOrient = d => {
+  let s=50;
+  if(EXPLOIT_E.includes(d.effect)) s-=25;
+  else if(EXPLORE_E.includes(d.effect)) s+=25;
+  const nd=netDebt(d.debts);
+  if(nd<-2) s-=8; if(nd>3) s+=8;
+  return Math.max(5,Math.min(95,Math.round(s)));
+};
+const getOrient = d => d.orient!=null ? d.orient : suggestOrient(d);
 
-        const IS = { width:"100%", background:"#FFFFFF", border:"1.5px solid #DDD9D0", borderRadius:8, padding:"9px 12px", color:"#1A1917", fontSize:14, outline:"none", boxSizing:"border-box", fontFamily:"inherit" };
-        const fmt = n => Math.round(n).toLocaleString("nb-NO");
-        const emptyD = () => ({ ideology:0, competence:0, working_env:0, user_sat:0, reputation:0, infra:0, shadow_it:0, technical:0, governance:0 });
-        const netDebt = d => Object.values(d||{}).reduce((a,b)=>a+b, 0);
-        const orientLabel = v => v<30?"Primært exploitasjon":v<45?"Overvekt exploitasjon":v<=55?"Balansert":v<70?"Overvekt explorasjon":"Primært explorasjon";
+// ── Delte UI-komponenter ─────────────────────────────────────────────────────
+const Lbl = ({t,hint}) => <div style={{marginBottom:6}}><div style={{fontSize:11,fontWeight:700,color:C.sub,textTransform:"uppercase",letterSpacing:"0.07em"}}>{t}</div>{hint&&<div style={{fontSize:11,color:C.muted,marginTop:1,lineHeight:1.4}}>{hint}</div>}</div>;
+const Card = ({children,style={}}) => <div style={{background:C.surface,border:`1px solid ${C.border}`,borderRadius:12,boxShadow:C.sh,...style}}>{children}</div>;
+const Tag = ({color="green",text}) => { const m={green:[C.greenBg,C.green,C.greenBd],blue:[C.blueBg,C.blue,C.blueBd],amber:[C.amberBg,C.amber,C.amberBd],red:[C.redBg,C.red,C.redBd]}; const[bg,tc,bd]=m[color]||m.green; return <span style={{fontSize:11,padding:"3px 10px",borderRadius:20,fontWeight:600,background:bg,color:tc,border:`1px solid ${bd}`}}>{text}</span>; };
+const TypeBadge = ({type}) => { const m={tech:[C.blueBg,C.blue,C.blueBd],org:["#F0EBFF","#5030A0","#C8B0F0"],process:[C.greenBg,C.green,C.greenBd],design:[C.amberBg,C.amber,C.amberBd]}; const[bg,tc,bd]=m[type]||m.tech; return <span style={{fontSize:11,padding:"3px 10px",borderRadius:20,fontWeight:600,background:bg,color:tc,border:`1px solid ${bd}`}}>{TYPES[type]?.l||"Valg"}</span>; };
+const Tip = ({color="amber",text}) => { const m={green:[C.greenBg,C.greenBd,C.green,Ico.OK],red:[C.redBg,C.redBd,C.red,Ico.Warn],amber:[C.amberBg,C.amberBd,C.amber,Ico.Info]}; const[bg,bd,tc,Icon]=m[color]||m.amber; return <div style={{display:"flex",gap:10,background:bg,border:`1px solid ${bd}`,borderRadius:10,padding:"11px 15px",fontSize:13,color:tc,lineHeight:1.6,marginTop:12}}><Icon s={15} st={{flexShrink:0,marginTop:2}}/><span>{text}</span></div>; };
+const Stat = ({label,value,sub,color,bg}) => <div style={{background:bg||C.raised,border:`1px solid ${C.border}`,borderRadius:10,padding:"12px 14px",textAlign:"center"}}><div style={{fontSize:10,fontWeight:700,color:C.muted,textTransform:"uppercase",letterSpacing:"0.07em",marginBottom:5}}>{label}</div><div style={{fontSize:16,fontWeight:700,color:color||C.text}}>{value}</div>{sub&&<div style={{fontSize:10,color:C.muted,marginTop:4}}>{sub}</div>}</div>;
+const DebtBar = ({label,value,max}) => { const pct=Math.abs(value)/max*100,bc=value<0?C.green:C.red; return <div style={{display:"flex",alignItems:"center",gap:10,marginBottom:8}}><span style={{fontSize:12,color:C.sub,width:110,flexShrink:0}}>{label}</span><div style={{flex:1,height:6,background:C.raised,borderRadius:3,overflow:"hidden",border:`1px solid ${C.border}`}}><div style={{height:"100%",width:pct+"%",background:bc,borderRadius:3}}/></div><span style={{fontSize:12,fontWeight:700,color:bc,width:28,textAlign:"right"}}>{value>0?"+":""}{value}</span></div>; };
+const ChartTT = ({active,payload,label}) => { if(!active||!payload?.length) return null; const v=payload[0].value; return <div style={{background:C.surface,border:`1px solid ${C.border}`,borderRadius:8,padding:"9px 13px",fontSize:12,boxShadow:C.shMd}}><div style={{color:C.sub,marginBottom:3,fontWeight:600}}>{label}</div><div style={{fontWeight:700,fontSize:15,color:v<0?C.green:v>0?C.red:C.muted}}>{v>0?"+":""}{v}</div></div>; };
 
-        // ── Data og Konfigurasjon ─────────────────────────────────────────────
-        const DEBTS = [
-            {k:"ideology",    n:"Ideologi",         s:"Ideologi",    d:"Teknologibias og leverandørpreferanser"},
-            {k:"competence",  n:"Kompetanse",        s:"Kompetanse",  d:"Kompetanse, opplæring og kognitiv belastning"},
-            {k:"working_env", n:"Arbeidsmiljø",      s:"Arbeidsmiljø",d:"Kultur, DevEx og absorbsjonsevne"},
-            {k:"user_sat",    n:"Brukertilfredshet", s:"Brukertilf.", d:"Sluttbrukernes opplevelse av IT-leveransen"},
-            {k:"reputation",  n:"Omdømme",           s:"Omdømme",     d:"Tillit til IT-funksjonen over tid"},
-            {k:"infra",       n:"Infrastruktur",     s:"Infra",       d:"Driftsintensitet, IaC-gjeld og lock-in"},
-            {k:"shadow_it",   n:"Shadow IT",         s:"Shadow IT",   d:"Workarounds utenfor plattformens kontroll"},
-            {k:"technical",   n:"Teknisk gjeld",     s:"Teknisk",     d:"Dokumentasjon, automatisering og vedlikehold"},
-            {k:"governance",  n:"Governance",        s:"Governance",  d:"Beslutningsstrukturer og compliance-overhead"}
-        ];
+// ── Porteføljematrise ────────────────────────────────────────────────────────
+function Matrix({decisions,onOpen}) {
+  if(!decisions.length) return <div style={{padding:"48px 0",textAlign:"center",color:C.muted}}>Legg til valg for å se porteføljematrisen.</div>;
+  const maxAbs=Math.max(5,...decisions.map(d=>Math.abs(netDebt(d.debts))));
+  const eN=decisions.filter(d=>getOrient(d)<45).length, xN=decisions.filter(d=>getOrient(d)>55).length, bN=decisions.length-eN-xN;
+  const tc={tech:[C.blueBg,C.blue,C.blueBd],org:["#F0EBFF","#5030A0","#C8B0F0"],process:[C.greenBg,C.green,C.greenBd],design:[C.amberBg,C.amber,C.amberBd]};
+  const ePct=Math.round(eN/decisions.length*100), xPct=Math.round(xN/decisions.length*100);
+  return (
+    <div style={{padding:"20px 22px"}}>
+      <div style={{fontSize:13,fontWeight:700,color:C.text,marginBottom:4}}>Porteføljematrise — ambideksteriprofil</div>
+      <div style={{fontSize:12,color:C.sub,marginBottom:14}}>Plassering basert på strategisk orientering og netto gjeld. Klikk et valg for å justere i analytikermodusen.</div>
+      <div style={{position:"relative",height:290,border:`1px solid ${C.border}`,borderRadius:12,overflow:"hidden",background:C.surface,marginBottom:14}}>
+        {[[0,0,"flex-start","Driftspress","Høy gjeld · Exploit",C.redBg,C.red],[50,0,"flex-start","Innovasjon under press","Høy gjeld · Explore","rgba(24,86,160,0.05)",C.blue],[0,50,"flex-end","Effektivisering","Amortisering · Exploit","rgba(13,122,86,0.05)",C.green],[50,50,"flex-end","Skalering","Amortisering · Explore","rgba(24,86,160,0.07)",C.blue]].map(([x,y,jc,title,sub,bg,color])=>(
+          <div key={title} style={{position:"absolute",left:`${x}%`,top:`${y}%`,width:"50%",height:"50%",background:bg,display:"flex",flexDirection:"column",justifyContent:jc,padding:"10px 12px"}}>
+            <div style={{fontSize:11,fontWeight:700,color}}>{title}</div><div style={{fontSize:10,color:C.muted}}>{sub}</div>
+          </div>
+        ))}
+        <div style={{position:"absolute",left:"50%",top:0,bottom:0,width:1,background:C.border}}/>
+        <div style={{position:"absolute",top:"50%",left:0,right:0,height:1,background:C.border}}/>
+        <div style={{position:"absolute",top:8,left:"50%",transform:"translateX(-50%)",fontSize:10,fontWeight:700,color:C.muted,background:C.surface,padding:"1px 6px",borderRadius:4}}>Høy gjeld</div>
+        <div style={{position:"absolute",bottom:8,left:"50%",transform:"translateX(-50%)",fontSize:10,fontWeight:700,color:C.muted,background:C.surface,padding:"1px 6px",borderRadius:4}}>Amortisering</div>
+        <div style={{position:"absolute",left:8,top:"50%",transform:"translateY(-50%)",fontSize:10,fontWeight:700,color:C.muted}}>Exploit</div>
+        <div style={{position:"absolute",right:8,top:"50%",transform:"translateY(-50%)",fontSize:10,fontWeight:700,color:C.muted}}>Explore</div>
+        {decisions.map(d=>{
+          const o=getOrient(d),nd2=netDebt(d.debts),xP=o,yP=50-(nd2/maxAbs)*42;
+          const[bg,color,bd]=tc[d.type]||tc.tech;
+          return <div key={d.id} onClick={()=>onOpen(d.id)} title={d.name} style={{position:"absolute",left:`calc(${xP}% - 44px)`,top:`calc(${yP}% - 13px)`,background:bg,border:`1px solid ${bd}`,borderRadius:20,padding:"4px 10px",fontSize:11,fontWeight:600,color,whiteSpace:"nowrap",maxWidth:120,overflow:"hidden",textOverflow:"ellipsis",cursor:"pointer",boxShadow:C.sh,zIndex:2}}>{d.name}</div>;
+        })}
+      </div>
+      <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:10,marginBottom:8}}>
+        <Stat label="Exploitasjon" value={eN} sub={ePct+"%"} color={C.green} bg={C.greenBg}/>
+        <Stat label="Balansert" value={bN} sub={Math.round(bN/decisions.length*100)+"%"} color={C.amber} bg={C.amberBg}/>
+        <Stat label="Explorasjon" value={xN} sub={xPct+"%"} color={C.blue} bg={C.blueBg}/>
+      </div>
+      {ePct>75 && <Tip color="amber" text={`${ePct}% exploitasjon. Vurder om porteføljen har nok kapasitet til innovasjon og langsiktig kapabilitetsbygging.`}/>}
+      {xPct>75 && <Tip color="amber" text={`${xPct}% explorasjon. Vurder om det er tilstrekkelig fokus på operasjonell stabilitet.`}/>}
+      {ePct<=75&&xPct<=75 && <Tip color="green" text="God balanse mellom exploitasjon og explorasjon — tegn på organisatorisk ambideksteri."/>}
+    </div>
+  );
+}
 
-        const TYPES = {
-            tech:    { l:"Teknologivalg",    e:"⚙️", desc:"Tekniske løsninger og plattformer", ph:"F.eks. Azure Firewall" },
-            org:     { l:"Organisasjonsvalg",e:"🏗️", desc:"Teamstruktur og kompetansemodell", ph:"F.eks. Plattformteam" },
-            process: { l:"Prosessvalg",      e:"🔄", desc:"Arbeidsmetodikk og leveranse", ph:"F.eks. CI/CD-pipeline" },
-            design:  { l:"Designvalg",       e:"🧩", desc:"Arkitektur og endringsevne", ph:"F.eks. API-first integrasjon" }
-        };
+// ── Fasekart ─────────────────────────────────────────────────────────────────
+function Roadmap({decisions,onOpen}) {
+  if(!decisions.length) return <div style={{padding:"48px 0",textAlign:"center",color:C.muted}}>Legg til valg for å se fasekartet.</div>;
+  const untagged=decisions.filter(d=>!d.phase);
+  const pc={Assimilering:[C.blue,C.blueBg,C.blueBd],Rekonstruksjon:[C.amber,C.amberBg,C.amberBd],Materialisering:[C.green,C.greenBg,C.greenBd]};
+  return (
+    <div style={{padding:"20px 22px"}}>
+      <div style={{fontSize:13,fontWeight:700,color:C.text,marginBottom:4}}>Fasekart — veikart for ledelsen</div>
+      <div style={{fontSize:12,color:C.sub,marginBottom:12}}>Tildel fase til hvert valg i analytikermodusen.</div>
+      {untagged.length>0&&<div style={{display:"flex",gap:8,alignItems:"center",background:C.amberBg,border:`1px solid ${C.amberBd}`,borderRadius:9,padding:"9px 14px",marginBottom:14,fontSize:12,color:C.amber}}><Ico.Info s={13}/>{untagged.length} valg mangler fasetildeling.</div>}
+      <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:12}}>
+        {PHASES.map((phase,i)=>{
+          const list=decisions.filter(d=>d.phase===phase);
+          const[tc,bg,bd]=pc[phase]||[C.blue,C.blueBg,C.blueBd];
+          return (
+            <div key={phase}>
+              <div style={{background:bg,border:`1px solid ${bd}`,borderRadius:10,padding:"10px 14px",marginBottom:8}}>
+                <div style={{fontSize:13,fontWeight:700,color:tc}}>{i+1}. {phase}</div>
+                <div style={{fontSize:11,color:C.muted,marginTop:2}}>{list.length} tiltak</div>
+              </div>
+              {list.length===0
+                ? <div style={{border:`1.5px dashed ${C.border}`,borderRadius:9,padding:"22px 12px",textAlign:"center",color:C.muted,fontSize:12}}>Ingen tiltak tildelt</div>
+                : list.map(d=>{
+                    const nd2=netDebt(d.debts);
+                    return <div key={d.id} onClick={()=>onOpen(d.id)} style={{background:C.surface,border:`1px solid ${C.border}`,borderRadius:9,padding:"11px 13px",cursor:"pointer",marginBottom:7,transition:"all .15s"}}
+                      onMouseEnter={e=>{e.currentTarget.style.borderColor=bd;e.currentTarget.style.background=bg}}
+                      onMouseLeave={e=>{e.currentTarget.style.borderColor=C.border;e.currentTarget.style.background=C.surface}}>
+                      <div style={{fontSize:13,fontWeight:600,color:C.text,marginBottom:5}}>{d.name}</div>
+                      <TypeBadge type={d.type}/>
+                      <div style={{display:"flex",gap:10,marginTop:7,fontSize:11}}>
+                        <span style={{color:nd2<0?C.green:nd2>0?C.red:C.muted}}>Gjeld: {nd2>0?"+":""}{nd2}</span>
+                        {d.eff!=null&&<span style={{color:d.eff>=1?C.green:C.red}}>xV: {d.eff.toFixed(2)}x</span>}
+                      </div>
+                    </div>;
+                  })
+              }
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
 
-        const EFFECTS = {
-            tech:    ["Reduserer driftsoverhead","Øker automatisering","Frigjør intern kapasitet","Muliggjør ny kapabilitet"],
-            org:     ["Sentralisering av beslutninger","Desentralisering / økt autonomi","Redusert kognitiv belastning"],
-            process: ["Kortere leveransetid","Redusert manuelt arbeid","Bedre compliance-håndtering","Redusert endringsrisiko"],
-            design:  ["Løsere kobling","Bedre skalerbarhet","Økt gjenbruk","Redusert kompleksitet"]
-        };
+// ── Detaljvisning + Analytikermodusen ────────────────────────────────────────
+function Detail({decision,onBack,onUpdate}) {
+  const auto=suggestOrient(decision);
+  const[a,setA]=useState({phase:decision.phase||"",tension:decision.tension||"",orient:decision.orient??null,notes:decision.notes||""});
+  const[w,setW]=useState({debts:{...decision.debts},cost:decision.cost||"",hours:decision.hours||"",hourRate:decision.hourRate||1100,horizons:decision.horizons||8,prob:decision.prob||0.7,absorb:decision.absorb||0.6});
+  const[editW,setEditW]=useState(false);
+  const[savedA,setSavedA]=useState(false);
+  const[savedW,setSavedW]=useState(false);
 
-        const TENSIONS = [
-            {k:"alignment", l:"Alignment", d:"Forretningstransformasjon ↔ Medarbeidertransformasjon"},
-            {k:"change", l:"Endring", d:"Radikal innovasjon ↔ Inkrementell innovasjon"},
-            {k:"knowledge", l:"Kunnskap", d:"Anskaffe ny kompetanse ↔ Vedlikeholde eksisterende"},
-            {k:"delivery", l:"Leveranse", d:"Ny infrastruktur ↔ Legacy-miljø"},
-            {k:"risk", l:"Risiko", d:"Innovasjon ↔ Compliance og kontroll"}
-        ];
+  const nd=netDebt(w.debts),dc=nd<0?C.green:nd>0?C.red:C.sub;
+  const cost=parseFloat(w.cost)||0,hours=parseFloat(w.hours)||0,rate=parseFloat(w.hourRate)||1100,hor=parseFloat(w.horizons)||8;
+  const xv=hours*rate*hor*(w.prob||0.7)*(w.absorb||0.6),eff=cost>0?xv/cost:null;
+  const orientVal=a.orient??auto;
+  const sig=DEBTS.filter(c=>(w.debts[c.k]||0)!==0),mx=Math.max(1,...sig.map(c=>Math.abs(w.debts[c.k])));
+  const t=a.tension?TENSIONS.find(x=>x.k===a.tension):null;
 
-        const PHASES = ["Assimilering","Rekonstruksjon","Materialisering"];
+  const saveWorkshop=()=>{onUpdate(decision.id,{debts:w.debts,cost:parseFloat(w.cost)||0,hours:parseFloat(w.hours)||0,hourRate:parseFloat(w.hourRate)||1100,horizons:parseFloat(w.horizons)||8,prob:w.prob,absorb:w.absorb,xv,eff});setSavedW(true);setEditW(false);setTimeout(()=>setSavedW(false),2000);};
+  const saveAnalyst=()=>{onUpdate(decision.id,{phase:a.phase||null,tension:a.tension||null,orient:a.orient,notes:a.notes});setSavedA(true);setTimeout(()=>setSavedA(false),2000);};
 
-        const suggestOrient = d => {
-            let s = 50;
-            if (["Reduserer driftsoverhead","Kortere leveransetid"].includes(d.effect)) s -= 25;
-            else if (["Muliggjør ny kapabilitet","Bedre skalerbarhet"].includes(d.effect)) s += 25;
-            const nd = netDebt(d.debts);
-            if (nd < -2) s -= 8;
-            if (nd > 3)  s += 8;
-            return Math.max(5, Math.min(95, Math.round(s)));
-        };
-        const getOrient = d => d.orient != null ? d.orient : suggestOrient(d);
+  const Btn=({onClick,children,variant="dark"})=><button onClick={onClick} style={{display:"flex",alignItems:"center",justifyContent:"center",gap:7,padding:"9px 18px",background:variant==="dark"?C.text:variant==="green"?C.green:C.surface,color:variant==="light"?C.sub:"#FFF",border:variant==="light"?`1px solid ${C.border}`:"none",borderRadius:9,fontSize:13,fontWeight:600,cursor:"pointer",fontFamily:"inherit",width:"100%",boxShadow:C.sh}}>{children}</button>;
 
-        // ── UI Komponenter ────────────────────────────────────────────────────
-        function Lbl({ t, hint }) {
-            return (
-                <div style={{ marginBottom:6 }}>
-                    <div style={{ fontSize:11, fontWeight:700, color:C.sub, textTransform:"uppercase", letterSpacing:"0.07em" }}>{t}</div>
-                    {hint && <div style={{ fontSize:11, color:C.muted, marginTop:1, lineHeight:1.4 }}>{hint}</div>}
-                </div>
-            );
-        }
+  return (
+    <div>
+      <div style={{display:"flex",alignItems:"center",gap:10,marginBottom:22,flexWrap:"wrap"}}>
+        <button onClick={onBack} style={{display:"flex",alignItems:"center",gap:6,padding:"7px 14px",background:C.surface,color:C.sub,border:`1px solid ${C.border}`,borderRadius:8,fontSize:13,cursor:"pointer",fontFamily:"inherit"}}><Ico.Back s={14}/> Dashboard</button>
+        <TypeBadge type={decision.type}/>
+        {a.phase&&<Tag color="blue" text={a.phase}/>}
+        {a.orient!=null&&<Tag color={orientVal<45?"green":orientVal>55?"blue":"amber"} text={orientLabel(orientVal)}/>}
+        <span style={{fontSize:17,fontWeight:700,color:C.text}}>{decision.name}</span>
+      </div>
+      <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:20,alignItems:"start"}}>
+        {/* Venstre: Workshopdata */}
+        <div>
+          <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:10}}>
+            <div style={{fontSize:11,fontWeight:700,color:C.sub,textTransform:"uppercase",letterSpacing:"0.07em"}}>Workshopdata</div>
+            <button onClick={()=>setEditW(v=>!v)} style={{display:"flex",alignItems:"center",gap:5,padding:"5px 12px",background:editW?C.raised:C.surface,color:editW?C.text:C.sub,border:`1px solid ${editW?C.borderHi:C.border}`,borderRadius:7,fontSize:12,cursor:"pointer",fontFamily:"inherit",fontWeight:editW?600:400}}>
+              <Ico.Edit s={12}/>{editW?"Avbryt":"Rediger"}
+            </button>
+          </div>
+          <Card style={{padding:18,marginBottom:12}}>
+            <div style={{fontSize:17,fontWeight:700,color:C.text,marginBottom:6}}>{decision.name}</div>
+            {decision.what&&<div style={{fontSize:13,color:C.sub,marginBottom:6,lineHeight:1.5}}>{decision.what}</div>}
+            {decision.effect&&<div style={{fontSize:11,background:C.greenBg,color:C.green,padding:"2px 8px",borderRadius:20,fontWeight:600,display:"inline-flex",alignItems:"center",gap:4,marginBottom:6}}><Ico.Check s={10}/>{decision.effect}</div>}
+            {decision.replaces&&<div style={{fontSize:12,color:C.muted,marginTop:4}}>Erstatter: <span style={{color:C.sub}}>{decision.replaces}</span></div>}
+            <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:8,marginTop:14}}>
+              <Stat label="Netto gjeld" value={(nd>0?"+":"")+nd} color={dc} bg={nd<0?C.greenBg:nd>0?C.redBg:C.raised}/>
+              <Stat label="Forventet verdi" value={xv>0?"kr "+fmt(xv):"–"} color={C.green} bg={C.greenBg}/>
+              <Stat label="xV-effektivitet" value={eff!=null?eff.toFixed(2)+"x":"–"} color={eff>=1?C.green:eff!=null?C.red:C.sub} bg={eff>=1?C.greenBg:eff!=null?C.redBg:C.raised}/>
+            </div>
+          </Card>
+          <Card style={{padding:16,marginBottom:12}}>
+            <div style={{fontSize:11,fontWeight:700,color:C.sub,textTransform:"uppercase",letterSpacing:"0.07em",marginBottom:12}}>Gjeldsprofil</div>
+            {editW
+              ? DEBTS.map(cat=>{const v=w.debts[cat.k]||0,vc=v<0?C.green:v>0?C.red:C.sub;return(
+                  <div key={cat.k} style={{background:v<0?C.greenBg:v>0?C.redBg:C.raised,border:`1px solid ${v<0?C.greenBd:v>0?C.redBd:C.border}`,borderRadius:9,padding:"10px 14px",marginBottom:7}}>
+                    <div style={{display:"flex",justifyContent:"space-between",marginBottom:3}}><span style={{fontSize:13,fontWeight:600,color:C.text}}>{cat.n}</span><span style={{fontSize:13,fontWeight:700,color:vc}}>{v>0?"+":""}{v}</span></div>
+                    <div style={{fontSize:11,color:C.sub,marginBottom:7}}>{cat.d}</div>
+                    <input type="range" min="-5" max="5" step="1" value={v} onChange={e=>setW(p=>({...p,debts:{...p.debts,[cat.k]:parseInt(e.target.value)}}))} style={{accentColor:v<0?C.green:v>0?C.red:C.sub}}/>
+                    <div style={{display:"flex",justifyContent:"space-between",fontSize:10,color:C.muted,marginTop:2}}><span>← Amortisering</span><span>Lån →</span></div>
+                  </div>);})
+              : sig.length>0 ? sig.map(c=><DebtBar key={c.k} label={c.n} value={w.debts[c.k]} max={mx}/>)
+                             : <div style={{fontSize:13,color:C.muted}}>Alle kategorier er 0.</div>
+            }
+          </Card>
+          {editW&&<Card style={{padding:18,marginBottom:12}}>
+            <div style={{fontSize:11,fontWeight:700,color:C.sub,textTransform:"uppercase",letterSpacing:"0.07em",marginBottom:14}}>xV-verdier</div>
+            <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10,marginBottom:14}}>
+              {[["Kostnad (kr)","cost","500 000"],["Frigjort kapasitet (t/kv.)","hours","160"],["Timekostnad (kr/t)","hourRate","1 100"],["Tidshorisont (kvartaler)","horizons","8"]].map(([l,k,ph])=>(
+                <div key={k}><Lbl t={l}/><input type="number" style={IS} placeholder={ph} value={w[k]||""} onChange={e=>setW(p=>({...p,[k]:e.target.value}))}/></div>
+              ))}
+            </div>
+            {[["Sannsynlighet for realisering","prob",w.prob],["Organisatorisk absorbsjonsevne","absorb",w.absorb]].map(([l,k,v])=>(
+              <div key={k} style={{marginBottom:14}}>
+                <div style={{display:"flex",justifyContent:"space-between",marginBottom:4}}><span style={{fontSize:13,fontWeight:600,color:C.text}}>{l}</span><span style={{fontSize:13,fontWeight:700,color:v>=0.7?C.green:v>=0.4?C.amber:C.red,background:v>=0.7?C.greenBg:v>=0.4?C.amberBg:C.redBg,padding:"1px 10px",borderRadius:20}}>{Math.round(v*100)}%</span></div>
+                <input type="range" min="10" max="100" step="5" value={Math.round(v*100)} onChange={e=>setW(p=>({...p,[k]:parseInt(e.target.value)/100}))} style={{accentColor:C.green}}/>
+              </div>
+            ))}
+          </Card>}
+          {editW&&<Btn onClick={saveWorkshop} variant={savedW?"green":"dark"}>{savedW?<><Ico.Check s={14}/> Lagret!</>:<><Ico.Check s={14}/> Lagre workshopendringer</>}</Btn>}
+        </div>
+        {/* Høyre: Analytikermodusen */}
+        <div>
+          <div style={{fontSize:11,fontWeight:700,color:C.sub,textTransform:"uppercase",letterSpacing:"0.07em",marginBottom:10,display:"flex",alignItems:"center",gap:6}}><Ico.Edit s={13}/> Analytikermodusen</div>
+          <Card style={{padding:18,display:"flex",flexDirection:"column",gap:16}}>
+            <Tip color="amber" text="Fyll inn strategiske dimensjoner etter workshopen. Brukes i porteføljematrise og fasekart."/>
+            <div><Lbl t="Transformasjonsfase"/>
+              <select style={IS} value={a.phase} onChange={e=>setA(p=>({...p,phase:e.target.value}))}>
+                <option value="">Ikke tildelt</option>{PHASES.map(p=><option key={p}>{p}</option>)}
+              </select>
+            </div>
+            <div><Lbl t="Paradoksal spenning" hint="Opanszky & Vollen (2020)"/>
+              <select style={IS} value={a.tension} onChange={e=>setA(p=>({...p,tension:e.target.value}))}>
+                <option value="">Ikke tildelt</option>{TENSIONS.map(x=><option key={x.k} value={x.k}>{x.l} — {x.d}</option>)}
+              </select>
+              {t&&<div style={{fontSize:11,color:C.blue,background:C.blueBg,border:`1px solid ${C.blueBd}`,borderRadius:6,padding:"4px 10px",marginTop:6,display:"inline-block"}}>{t.d}</div>}
+            </div>
+            <div style={{background:C.raised,borderRadius:10,padding:"14px 16px"}}>
+              <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:6}}>
+                <Lbl t="Strategisk orientering"/>
+                <Tag color="blue" text={`Auto: ${orientLabel(auto)}`}/>
+              </div>
+              <div style={{fontSize:11,color:C.muted,marginBottom:10}}>Auto-beregnet. Kan overstyres manuelt.</div>
+              <div style={{display:"flex",justifyContent:"space-between",fontSize:12,marginBottom:8}}>
+                <span style={{color:orientVal<45?C.green:C.muted,fontWeight:orientVal<45?700:400}}>← Exploitasjon</span>
+                <span style={{fontWeight:700,color:orientVal<45?C.green:orientVal>55?C.blue:C.amber}}>{orientLabel(orientVal)}</span>
+                <span style={{color:orientVal>55?C.blue:C.muted,fontWeight:orientVal>55?700:400}}>Explorasjon →</span>
+              </div>
+              <input type="range" min="0" max="100" step="5" value={orientVal} onChange={e=>setA(p=>({...p,orient:parseInt(e.target.value)}))} style={{accentColor:orientVal<45?C.green:orientVal>55?C.blue:C.amber}}/>
+              {a.orient!==null&&<button onClick={()=>setA(p=>({...p,orient:null}))} style={{marginTop:7,fontSize:11,color:C.blue,background:"none",border:"none",cursor:"pointer",padding:0}}>↺ Tilbakestill til auto ({auto})</button>}
+            </div>
+            <div><Lbl t="Notater (valgfritt)"/>
+              <textarea style={{...IS,resize:"none",height:60}} placeholder="Arkitekturnotater, beslutningsgrunnlag el.l." value={a.notes} onChange={e=>setA(p=>({...p,notes:e.target.value}))}/>
+            </div>
+            <Btn onClick={saveAnalyst} variant={savedA?"green":"dark"}>{savedA?<><Ico.Check s={14}/> Lagret!</>:<><Ico.Check s={14}/> Lagre analytikerdata</>}</Btn>
+          </Card>
+        </div>
+      </div>
+    </div>
+  );
+}
 
-        function Card({ children, style={} }) {
-            return <div style={{ background:C.surface, border:`1px solid ${C.border}`, borderRadius:12, boxShadow:C.sh, ...style }}>{children}</div>;
-        }
+// ── Dashboard ─────────────────────────────────────────────────────────────────
+function Dashboard({decisions,onNew,onDelete,onOpen}) {
+  const[tab,setTab]=useState("overview");
+  const tDebt=decisions.reduce((s,d)=>s+netDebt(d.debts),0);
+  const tXV=decisions.reduce((s,d)=>s+(d.xv||0),0);
+  const tCost=decisions.reduce((s,d)=>s+(d.cost||0),0);
+  const freed=decisions.reduce((s,d)=>s+(d.hours||0)*(d.hourRate||1100)*(d.horizons||1),0);
+  const xvEff=tCost>0?tXV/tCost:null;
+  const dc=tDebt<0?C.green:tDebt>0?C.red:C.text,xc=xvEff==null?C.sub:xvEff>=1?C.green:C.red;
+  const catTot={}; DEBTS.forEach(d=>{catTot[d.k]=0}); decisions.forEach(d=>DEBTS.forEach(c=>{catTot[c.k]+=(d.debts[c.k]||0)}));
+  const chart=DEBTS.map(c=>({name:c.s,value:catTot[c.k]}));
 
-        function Tag({ color, text }) {
-            const m = { green:[C.greenBg,C.green,C.greenBd], blue:[C.blueBg,C.blue,C.blueBd], amber:[C.amberBg,C.amber,C.amberBd] };
-            const [bg,tc,bd] = m[color] || m.green;
-            return <span style={{ fontSize:11, padding:"3px 10px", borderRadius:20, fontWeight:600, background:bg, color:tc, border:`1px solid ${bd}` }}>{text}</span>;
-        }
-
-        function TypeBadge({ type }) {
-            const m = { tech:[C.blueBg,C.blue,C.blueBd], org:["#F0EBFF","#5030A0","#C8B0F0"], process:[C.greenBg,C.green,C.greenBd], design:[C.amberBg,C.amber,C.amberBd] };
-            const [bg,tc,bd] = m[type] || m.tech;
-            return <span style={{ fontSize:11, padding:"3px 10px", borderRadius:20, fontWeight:600, background:bg, color:tc, border:`1px solid ${bd}` }}>{TYPES[type]?.l || "Valg"}</span>;
-        }
-
-        function Tip({ color, text }) {
-            const m = { green:[C.greenBg,C.greenBd,C.green,"check-circle"], red:[C.redBg,C.redBd,C.red,"alert-triangle"], amber:[C.amberBg,C.amberBd,C.amber,"info"] };
-            const [bg,bd,tc,iconName] = m[color] || m.amber;
-            return (
-                <div style={{ display:"flex", gap:10, background:bg, border:`1px solid ${bd}`, borderRadius:10, padding:"11px 15px", fontSize:13, color:tc, lineHeight:1.6, marginTop:12 }}>
-                    <Icon name={iconName} size={15} style={{ flexShrink:0, marginTop:2 }} /><span>{text}</span>
-                </div>
-            );
-        }
-
-        function ChartTT({ active, payload, label }) {
-            if (!active || !payload?.length) return null;
-            const v = payload[0].value;
-            return (
-                <div style={{ background:C.surface, border:`1px solid ${C.border}`, borderRadius:8, padding:"9px 13px", fontSize:12, boxShadow:C.shMd }}>
-                    <div style={{ color:C.sub, marginBottom:3, fontWeight:600 }}>{label}</div>
-                    <div style={{ fontWeight:700, fontSize:15, color:v<0?C.green:v>0?C.red:C.muted }}>{v>0?"+":""}{v}</div>
-                </div>
-            );
-        }
-
-        function Stat({ label, value, sub, color, bg }) {
-            return (
-                <div style={{ background:bg||C.raised, border:`1px solid ${C.border}`, borderRadius:10, padding:"12px 14px", textAlign:"center" }}>
-                    <div style={{ fontSize:10, fontWeight:700, color:C.muted, textTransform:"uppercase", letterSpacing:"0.07em", marginBottom:5 }}>{label}</div>
-                    <div style={{ fontSize:16, fontWeight:700, color:color||C.text }}>{value}</div>
-                    {sub && <div style={{ fontSize:10, color:C.muted, marginTop:4 }}>{sub}</div>}
-                </div>
-            );
-        }
-
-        // ── Matrise ───────────────────────────────────────────────────────────
-        function Matrix({ decisions, onOpen }) {
-            if (!decisions.length) return <div style={{ padding:"48px 0", textAlign:"center", color:C.muted, fontSize:14 }}>Legg til valg for å se porteføljematrisen.</div>;
-
-            const maxAbs = Math.max(5, ...decisions.map(d => Math.abs(netDebt(d.debts))));
-            const eN = decisions.filter(d => getOrient(d) < 45).length;
-            const xN = decisions.filter(d => getOrient(d) > 55).length;
-            const bN = decisions.length - eN - xN;
-
-            const typeCols = { tech:[C.blueBg, C.blue, C.blueBd], org:["#F0EBFF","#5030A0","#C8B0F0"], process:[C.greenBg, C.green, C.greenBd], design:[C.amberBg, C.amber, C.amberBd] };
-
-            return (
-                <div style={{ padding:"20px 22px" }}>
-                    <div style={{ fontSize:13, fontWeight:700, color:C.text, marginBottom:4 }}>Porteføljematrise — ambideksteriprofil</div>
-                    <div style={{ fontSize:12, color:C.sub, marginBottom:14 }}>Plassering basert på strategisk orientering og netto gjeld.</div>
-
-                    <div style={{ position:"relative", height:290, border:`1px solid ${C.border}`, borderRadius:12, overflow:"hidden", background:C.surface, marginBottom:14 }}>
-                        <div style={{ position:"absolute", left:0, top:0, width:"50%", height:"50%", background:C.redBg, padding:"9px 12px" }}>
-                            <div style={{ fontSize:11, fontWeight:700, color:C.red }}>Driftspress</div><div style={{ fontSize:10, color:C.muted }}>Høy gjeld · Exploit</div>
+  return (
+    <div>
+      <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",marginBottom:28}}>
+        <div>
+          <h1 style={{fontSize:26,fontWeight:700,margin:0,letterSpacing:"-0.025em",color:C.text}}>Platform Decision Tool</h1>
+          <p style={{fontSize:14,color:C.sub,marginTop:7,lineHeight:1.6,maxWidth:500}}>Mål digital gjeld og forventet verdi for teknologi-, organisasjons- og designvalg. Workshop-modus for teamet — analytikermodusen for arkitekten etterpå.</p>
+        </div>
+        <button onClick={onNew} style={{display:"flex",alignItems:"center",gap:7,padding:"10px 20px",background:C.green,color:"#FFF",border:"none",borderRadius:9,fontSize:14,fontWeight:600,cursor:"pointer",marginLeft:20,boxShadow:`0 2px 8px rgba(13,122,86,.25)`}}>
+          <Ico.Plus s={16}/> Nytt valg
+        </button>
+      </div>
+      <div style={{display:"grid",gridTemplateColumns:"repeat(4,1fr)",gap:12,marginBottom:22}}>
+        {[{l:"Netto gjeld",v:(tDebt>0?"+":"")+tDebt,sub:tDebt<0?"Amortisering":tDebt>0?"Gjeldsvekst":"Nøytral",c:dc,bg:tDebt<0?C.greenBg:tDebt>0?C.redBg:C.surface},
+          {l:"Frigjort verdi",v:freed>0?"kr "+fmt(freed):"–",sub:freed>0?fmt(decisions.reduce((s,d)=>s+(d.hours||0)*(d.horizons||1),0))+" timer":"–",c:C.green,bg:C.greenBg},
+          {l:"Forventet (xV)",v:tXV>0?"kr "+fmt(tXV):"–",sub:xvEff!=null?xvEff.toFixed(2)+"x per krone":"Fyll inn kostnad",c:xc,bg:xvEff>=1?C.greenBg:xvEff!=null?C.redBg:C.surface},
+          {l:"Valg totalt",v:decisions.length,sub:tCost>0?"Kost: kr "+fmt(tCost):"Denne sesjonen",c:C.text,bg:C.surface}
+        ].map(m=>(
+          <div key={m.l} style={{background:m.bg,border:`1px solid ${C.border}`,borderRadius:12,padding:"16px 18px",boxShadow:C.sh}}>
+            <div style={{fontSize:11,fontWeight:700,color:C.sub,textTransform:"uppercase",letterSpacing:"0.08em",marginBottom:8}}>{m.l}</div>
+            <div style={{fontSize:24,fontWeight:700,color:m.c,lineHeight:1}}>{m.v}</div>
+            <div style={{fontSize:12,color:C.sub,marginTop:6}}>{m.sub}</div>
+          </div>
+        ))}
+      </div>
+      <div style={{display:"flex",gap:2,borderBottom:`1px solid ${C.border}`,marginBottom:0}}>
+        {[["overview","Oversikt"],["matrix","Porteføljematrise"],["roadmap","Fasekart"]].map(([id,label])=>(
+          <button key={id} onClick={()=>setTab(id)} style={{padding:"9px 16px",background:"none",border:"none",borderBottom:tab===id?`2px solid ${C.text}`:"2px solid transparent",fontSize:13,fontWeight:tab===id?700:400,color:tab===id?C.text:C.sub,cursor:"pointer",fontFamily:"inherit",marginBottom:-1}}>{label}</button>
+        ))}
+      </div>
+      <Card style={{borderTopLeftRadius:0,borderTopRightRadius:0,borderTop:"none"}}>
+        {tab==="overview"&&(
+          <div style={{padding:"20px 22px"}}>
+            {decisions.length>0&&<>
+              <div style={{fontSize:13,fontWeight:700,color:C.text,marginBottom:4}}>Gjeldsprofil per kategori</div>
+              <div style={{fontSize:12,color:C.sub,marginBottom:14}}><span style={{color:C.green,fontWeight:600}}>Grønt</span> = reduseres · <span style={{color:C.red,fontWeight:600}}>Rødt</span> = ny gjeld</div>
+              <ResponsiveContainer width="100%" height={140}>
+                <BarChart data={chart} barSize={18} margin={{top:4,right:8,left:-22,bottom:0}}>
+                  <XAxis dataKey="name" tick={{fontSize:11,fill:C.sub}} axisLine={false} tickLine={false}/>
+                  <YAxis tick={{fontSize:11,fill:C.sub}} axisLine={false} tickLine={false}/>
+                  <Tooltip content={<ChartTT/>} cursor={{fill:"rgba(0,0,0,.04)"}}/>
+                  <Bar dataKey="value" radius={[4,4,0,0]}>{chart.map((e,i)=><Cell key={i} fill={e.value<0?C.green:e.value>0?C.red:C.border}/>)}</Bar>
+                </BarChart>
+              </ResponsiveContainer>
+              <div style={{borderTop:`1px solid ${C.border}`,marginTop:18,paddingTop:18}}/>
+            </>}
+            <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:12}}>
+              <div style={{fontSize:13,fontWeight:700,color:C.text}}>Registrerte valg</div>
+              {decisions.length>0&&<div style={{fontSize:12,color:C.muted}}>{decisions.length} valg · klikk for å åpne</div>}
+            </div>
+            {decisions.length===0
+              ?<div style={{border:`2px dashed ${C.border}`,borderRadius:12,padding:"44px 24px",textAlign:"center"}}>
+                <Ico.Layers s={32} st={{margin:"0 auto",display:"block",color:C.border,marginBottom:12}}/>
+                <div style={{fontSize:14,fontWeight:600,color:C.sub,marginBottom:8}}>Ingen valg ennå</div>
+                <p style={{fontSize:13,color:C.muted,maxWidth:320,margin:"0 auto 18px",lineHeight:1.7}}>Trykk «Nytt valg» for å starte workshop-registreringen.</p>
+                <button onClick={onNew} style={{display:"inline-flex",alignItems:"center",gap:7,padding:"9px 18px",background:C.green,color:"#FFF",border:"none",borderRadius:9,fontSize:14,fontWeight:600,cursor:"pointer"}}><Ico.Plus s={15}/> Første valg</button>
+              </div>
+              :<div style={{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(250px,1fr))",gap:12}}>
+                {decisions.map(d=>{
+                  const nd2=netDebt(d.debts),capKr=(d.hours||0)*(d.hourRate||1100)*(d.horizons||1);
+                  const dc2=nd2<0?C.green:nd2>0?C.red:C.muted,ec=d.eff>=1?C.green:d.eff!=null?C.red:C.muted;
+                  const analysed=d.phase||d.tension||d.orient!=null;
+                  return (
+                    <div key={d.id} onClick={()=>onOpen(d.id)} style={{background:C.surface,border:`1px solid ${C.border}`,borderRadius:12,boxShadow:C.sh,overflow:"hidden",cursor:"pointer",transition:"box-shadow .15s,border-color .15s"}}
+                      onMouseEnter={e=>{e.currentTarget.style.boxShadow=C.shMd;e.currentTarget.style.borderColor=C.borderHi}}
+                      onMouseLeave={e=>{e.currentTarget.style.boxShadow=C.sh;e.currentTarget.style.borderColor=C.border}}>
+                      <div style={{background:C.raised,padding:"9px 14px",display:"flex",justifyContent:"space-between",alignItems:"center",borderBottom:`1px solid ${C.border}`}}>
+                        <div style={{display:"flex",alignItems:"center",gap:6}}><TypeBadge type={d.type}/>{analysed&&<Tag color="blue" text="Analysert"/>}</div>
+                        <div style={{display:"flex",alignItems:"center",gap:8}}>
+                          {d.phase&&<span style={{fontSize:11,color:C.muted}}>{d.phase}</span>}
+                          <button onClick={e=>{e.stopPropagation();onDelete(d.id);}} style={{background:"none",border:"none",cursor:"pointer",color:C.muted,padding:0,display:"flex"}}
+                            onMouseEnter={e=>e.currentTarget.style.color=C.red} onMouseLeave={e=>e.currentTarget.style.color=C.muted}><Ico.Trash s={13}/></button>
                         </div>
-                        <div style={{ position:"absolute", left:"50%", top:0, width:"50%", height:"50%", background:"rgba(24,86,160,0.05)", padding:"9px 12px" }}>
-                            <div style={{ fontSize:11, fontWeight:700, color:C.blue }}>Innovasjon under press</div><div style={{ fontSize:10, color:C.muted }}>Høy gjeld · Explore</div>
+                      </div>
+                      <div style={{padding:"12px 14px"}}>
+                        <div style={{fontWeight:600,fontSize:14,color:C.text,marginBottom:4,lineHeight:1.4}}>{d.name}</div>
+                        {d.what&&<div style={{fontSize:12,color:C.sub,marginBottom:5,lineHeight:1.4}}>{d.what}</div>}
+                        {d.effect&&<div style={{fontSize:11,background:C.greenBg,color:C.green,padding:"2px 8px",borderRadius:20,fontWeight:600,display:"inline-flex",alignItems:"center",gap:4}}><Ico.Check s={10}/>{d.effect}</div>}
+                        <div style={{display:"flex",alignItems:"center",gap:4,marginTop:8,fontSize:11,color:C.blue,opacity:0.7}}>
+                          <Ico.Edit s={10}/> Åpne for detaljer og analytikermodusen <Ico.Chevron s={11}/>
                         </div>
-                        <div style={{ position:"absolute", left:0, top:"50%", width:"50%", height:"50%", background:"rgba(13,122,86,0.05)", display:"flex", flexDirection:"column", justifyContent:"flex-end", padding:"9px 12px" }}>
-                            <div style={{ fontSize:11, fontWeight:700, color:C.green }}>Effektivisering</div><div style={{ fontSize:10, color:C.muted }}>Amortisering · Exploit</div>
-                        </div>
-                        <div style={{ position:"absolute", left:"50%", top:"50%", width:"50%", height:"50%", background:"rgba(24,86,160,0.07)", display:"flex", flexDirection:"column", justifyContent:"flex-end", padding:"9px 12px" }}>
-                            <div style={{ fontSize:11, fontWeight:700, color:C.blue }}>Skalering</div><div style={{ fontSize:10, color:C.muted }}>Amortisering · Explore</div>
-                        </div>
-
-                        <div style={{ position:"absolute", left:"50%", top:0, bottom:0, width:1, background:C.border }} />
-                        <div style={{ position:"absolute", top:"50%", left:0, right:0, height:1, background:C.border }} />
-
-                        {decisions.map(d => {
-                            const o = getOrient(d);
-                            const nd = netDebt(d.debts);
-                            const xPct = o;
-                            const yPct = 50 - (nd / maxAbs) * 42;
-                            const [bg,tc,bd] = typeCols[d.type] || typeCols.tech;
-                            return (
-                                <div key={d.id} onClick={() => onOpen(d.id)} title={d.name}
-                                    style={{ position:"absolute", left:`calc(${xPct}% - 44px)`, top:`calc(${yPct}% - 13px)`, background:bg, border:`1px solid ${bd}`, borderRadius:20, padding:"4px 10px", fontSize:11, fontWeight:600, color:tc, whiteSpace:"nowrap", maxWidth:120, overflow:"hidden", textOverflow:"ellipsis", cursor:"pointer", boxShadow:C.sh, zIndex:2 }}>
-                                    {d.name}
-                                </div>
-                            );
-                        })}
+                      </div>
+                      <div style={{borderTop:`1px solid ${C.border}`,display:"grid",gridTemplateColumns:"1fr 1fr 1fr"}}>
+                        {[{l:"Gjeld",v:(nd2>0?"+":"")+nd2,c:dc2},{l:"xV-eff.",v:d.eff!=null?d.eff.toFixed(2)+"x":"–",c:ec},{l:"Frigjort",v:capKr>0?"kr "+fmt(capKr):"–",c:capKr>0?C.green:C.muted}].map((s,i)=>(
+                          <div key={i} style={{padding:"9px 11px",borderRight:i<2?`1px solid ${C.border}`:"none"}}>
+                            <div style={{fontSize:10,fontWeight:700,color:C.muted,textTransform:"uppercase",letterSpacing:"0.07em",marginBottom:2}}>{s.l}</div>
+                            <div style={{fontSize:13,fontWeight:700,color:s.c}}>{s.v}</div>
+                          </div>
+                        ))}
+                      </div>
                     </div>
+                  );
+                })}
+              </div>
+            }
+            {decisions.length>0&&(
+              <button onClick={onNew} style={{width:"100%",padding:13,background:"transparent",border:`1.5px dashed ${C.border}`,borderRadius:12,color:C.muted,fontSize:14,cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center",gap:8,fontFamily:"inherit",marginTop:12,transition:"all .15s"}}
+                onMouseEnter={e=>{e.currentTarget.style.background=C.raised;e.currentTarget.style.color=C.sub}}
+                onMouseLeave={e=>{e.currentTarget.style.background="transparent";e.currentTarget.style.color=C.muted}}>
+                <Ico.Plus s={15}/> Legg til nytt valg
+              </button>
+            )}
+          </div>
+        )}
+        {tab==="matrix"&&<Matrix decisions={decisions} onOpen={onOpen}/>}
+        {tab==="roadmap"&&<Roadmap decisions={decisions} onOpen={onOpen}/>}
+      </Card>
+    </div>
+  );
+}
+
+// ── Veiviser (forenklet workshop-modus) ──────────────────────────────────────
+function Wizard({onCancel,onSave}) {
+  const[step,setStep]=useState(0);
+  const[data,setData]=useState({name:"",type:"tech",what:"",effect:"",replaces:"",debts:emptyD(),cost:"",hours:"",hourRate:1100,horizons:8,prob:0.7,absorb:0.6});
+  const upd=p=>setData(prev=>({...prev,...p}));
+  const STEPS=["Beskriv","Gjeldsmåling","xV-analyse","Oppsummering"];
+
+  const save=()=>{
+    const c=parseFloat(data.cost)||0,h=parseFloat(data.hours)||0,r=parseFloat(data.hourRate)||1100,ho=parseFloat(data.horizons)||8;
+    const xv=h*r*ho*(data.prob||0.7)*(data.absorb||0.6);
+    onSave({...data,cost:c,hours:h,hourRate:r,horizons:ho,xv,eff:c>0?xv/c:null,id:Date.now()});
+  };
+
+  // Step 0
+  const S0=()=>{
+    const cfg=TYPES[data.type]||TYPES.tech;
+    return (
+      <div>
+        <div style={{fontSize:11,fontWeight:700,color:C.sub,textTransform:"uppercase",letterSpacing:"0.08em",marginBottom:6}}>Steg 1 · Kategoriser og beskriv</div>
+        <p style={{fontSize:14,color:C.sub,marginBottom:16,lineHeight:1.6}}>Velg type valg — feltene tilpasses automatisk. Fokuser på hva valget er og hvilken effekt det gir.</p>
+        <div style={{display:"grid",gridTemplateColumns:"repeat(4,1fr)",gap:8,marginBottom:18}}>
+          {Object.entries(TYPES).map(([k,tc])=>{
+            const active=data.type===k;
+            const m={tech:[C.blueBg,C.blue,C.blueBd],org:["#F0EBFF","#5030A0","#C8B0F0"],process:[C.greenBg,C.green,C.greenBd],design:[C.amberBg,C.amber,C.amberBd]};
+            const[bg,col,bd]=m[k];
+            return <button key={k} onClick={()=>upd({type:k})} style={{background:active?bg:C.surface,border:`2px solid ${active?col:C.border}`,borderRadius:12,padding:"12px 10px",cursor:"pointer",textAlign:"left",fontFamily:"inherit",transition:"all .15s"}}>
+              <div style={{fontSize:20,marginBottom:5}}>{tc.e}</div>
+              <div style={{fontSize:12,fontWeight:700,color:active?col:C.text,marginBottom:2}}>{tc.l}</div>
+              <div style={{fontSize:10,color:active?col:C.muted,lineHeight:1.3}}>{tc.desc}</div>
+            </button>;
+          })}
+        </div>
+        <Card style={{padding:18,display:"flex",flexDirection:"column",gap:14}}>
+          <div><Lbl t="Navn på valget"/><input style={IS} placeholder={cfg.ph} value={data.name} onChange={e=>upd({name:e.target.value})}/></div>
+          <div style={{display:"grid",gridTemplateColumns:"2fr 1fr",gap:12}}>
+            <div><Lbl t="Hva innføres, endres eller fjernes?" hint="Ikke nødvendigvis et enten/eller-bytte."/><textarea style={{...IS,resize:"none",height:68}} placeholder={cfg.ph} value={data.what||""} onChange={e=>upd({what:e.target.value})}/></div>
+            <div><Lbl t="Primær effekt"/>
+              <select style={IS} value={data.effect||""} onChange={e=>upd({effect:e.target.value})}>
+                <option value="">Velg…</option>{(EFFECTS[data.type]||EFFECTS.tech).map(e=><option key={e}>{e}</option>)}
+              </select>
+            </div>
+          </div>
+          <div><Lbl t="Erstatter / kontekst (valgfritt)"/><input style={IS} placeholder="F.eks. Palo Alto on-prem med manuell patching" value={data.replaces||""} onChange={e=>upd({replaces:e.target.value})}/></div>
+        </Card>
+      </div>
+    );
+  };
+
+  // Step 1
+  const S1=()=>{
+    const total=netDebt(data.debts),tc=total<0?C.green:total>0?C.red:C.sub;
+    return (
+      <div>
+        <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:6}}>
+          <div style={{fontSize:11,fontWeight:700,color:C.sub,textTransform:"uppercase",letterSpacing:"0.08em"}}>Steg 2 · Gjeldsmåling</div>
+          <span style={{fontSize:13,fontWeight:700,color:tc,background:total<0?C.greenBg:total>0?C.redBg:C.raised,padding:"2px 12px",borderRadius:20,border:`1px solid ${total<0?C.greenBd:total>0?C.redBd:C.border}`}}>Netto {total>0?"+":""}{total}</span>
+        </div>
+        <Tip color="amber" text="Juster i plenum. Venstre = gjeld reduseres (amortisering). Høyre = ny gjeld skapes (lån)."/>
+        <div style={{display:"flex",flexDirection:"column",gap:7,marginTop:14}}>
+          {DEBTS.map(cat=>{
+            const v=data.debts[cat.k]||0,vc=v<0?C.green:v>0?C.red:C.sub;
+            return <div key={cat.k} style={{background:v<0?C.greenBg:v>0?C.redBg:C.surface,border:`1px solid ${v<0?C.greenBd:v>0?C.redBd:C.border}`,borderRadius:11,padding:"12px 16px",transition:"all .2s"}}>
+              <div style={{display:"flex",justifyContent:"space-between",marginBottom:3}}><span style={{fontSize:13,fontWeight:600,color:C.text}}>{cat.n}</span><span style={{fontSize:13,fontWeight:700,color:vc}}>{v>0?"+":""}{v}</span></div>
+              <div style={{fontSize:12,color:C.sub,marginBottom:8,lineHeight:1.4}}>{cat.d}</div>
+              <input type="range" min="-5" max="5" step="1" value={v} onChange={e=>upd({debts:{...data.debts,[cat.k]:parseInt(e.target.value)}})} style={{accentColor:v<0?C.green:v>0?C.red:C.sub}}/>
+              <div style={{display:"flex",justifyContent:"space-between",fontSize:10,color:C.muted,marginTop:3}}><span>← Amortisering</span><span>Lån →</span></div>
+              <div style={{fontSize:11,color:C.sub,marginTop:7,fontStyle:"italic",borderTop:`1px solid ${v<0?C.greenBd:v>0?C.redBd:C.border}`,paddingTop:7}}>💬 {cat.q}</div>
+            </div>;
+          })}
+        </div>
+      </div>
+    );
+  };
+
+  // Step 2
+  const S2=()=>{
+    const cost=parseFloat(data.cost)||0,hours=parseFloat(data.hours)||0,rate=parseFloat(data.hourRate)||1100,hor=parseFloat(data.horizons)||8,prob=data.prob||0.7,abs=data.absorb||0.6;
+    const raw=hours*rate*hor,xv=raw*prob*abs,eff=cost>0?xv/cost:null;
+    return (
+      <div>
+        <div style={{fontSize:11,fontWeight:700,color:C.sub,textTransform:"uppercase",letterSpacing:"0.08em",marginBottom:6}}>Steg 3 · xV-analyse (Simon Hill)</div>
+        <p style={{fontSize:14,color:C.sub,marginBottom:16,lineHeight:1.6}}>Frigjort kapasitet multipliseres med timekostnad over tidshorisonten, justert for sannsynlighet og absorbsjonsevne.</p>
+        <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10,marginBottom:14}}>
+          {[["Implementeringskostnad (kr)","cost","500 000","Lisens + integrasjon + opplæring"],["Frigjort kapasitet (t/kvartal)","hours","160","Anslått reduksjon i driftstimer"],["Intern timekostnad (kr/t)","hourRate","1 100","Fullt loaded inkl. overhead"],["Tidshorisont (kvartaler)","horizons","8","Typisk 6–12 (1,5–3 år)"]].map(([l,k,ph,hint])=>(
+            <Card key={k} style={{padding:14}}><Lbl t={l} hint={hint}/><input type="number" style={IS} placeholder={ph} value={data[k]||""} onChange={e=>upd({[k]:e.target.value})}/></Card>
+          ))}
+        </div>
+        <Card style={{padding:18,marginBottom:14}}>
+          <Lbl t="Strategisk usikkerhet"/>
+          {[["Sannsynlighet for realisering","prob",prob,"Sjansen for at gevinsten materialiseres."],["Organisatorisk absorbsjonsevne","absorb",abs,"Kapasitet og vilje til å nyttiggjøre endringen."]].map(([l,k,v,d])=>(
+            <div key={k} style={{marginBottom:16}}>
+              <div style={{display:"flex",justifyContent:"space-between",marginBottom:3}}><span style={{fontSize:13,fontWeight:600,color:C.text}}>{l}</span><span style={{fontSize:13,fontWeight:700,color:v>=0.7?C.green:v>=0.4?C.amber:C.red,background:v>=0.7?C.greenBg:v>=0.4?C.amberBg:C.redBg,padding:"1px 10px",borderRadius:20}}>{Math.round(v*100)}%</span></div>
+              <div style={{fontSize:12,color:C.sub,marginBottom:8}}>{d}</div>
+              <input type="range" min="10" max="100" step="5" value={Math.round(v*100)} onChange={e=>upd({[k]:parseInt(e.target.value)/100})} style={{accentColor:C.green}}/>
+            </div>
+          ))}
+        </Card>
+        <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:10}}>
+          <Stat label="Råverdi" value={raw>0?"kr "+fmt(raw):"–"} sub="Før usikkerhet" color={C.sub}/>
+          <Stat label="Forventet verdi (xV)" value={xv>0?"kr "+fmt(xv):"–"} sub={"Over "+hor+" kvartaler"} color={C.green} bg={C.greenBg}/>
+          <Stat label="xV-effektivitet" value={eff!=null?eff.toFixed(2)+"x":"–"} sub={eff==null?"–":eff>=1?"Lønnsomt":"Under 1x"} color={eff==null?C.sub:eff>=1?C.green:C.red} bg={eff==null?C.surface:eff>=1?C.greenBg:C.redBg}/>
+        </div>
+        {eff!=null&&eff<1&&<Tip color="red" text="xV under 1,0 — kostnaden overstiger forventet verdi. Vurder scope, tidshorisont eller absorbsjonsevne."/>}
+      </div>
+    );
+  };
+
+  // Step 3
+  const S3=()=>{
+    const nd=netDebt(data.debts),cost=parseFloat(data.cost)||0,hours=parseFloat(data.hours)||0,rate=parseFloat(data.hourRate)||1100,hor=parseFloat(data.horizons)||8;
+    const xv=hours*rate*hor*(data.prob||0.7)*(data.absorb||0.6),eff=cost>0?xv/cost:null,capKr=hours*rate*hor;
+    const dc=nd<0?C.green:nd>0?C.red:C.sub,sig=DEBTS.filter(c=>(data.debts[c.k]||0)!==0),mx=Math.max(1,...sig.map(c=>Math.abs(data.debts[c.k])));
+    return (
+      <div>
+        <div style={{fontSize:11,fontWeight:700,color:C.sub,textTransform:"uppercase",letterSpacing:"0.08em",marginBottom:6}}>Steg 4 · Oppsummering</div>
+        <p style={{fontSize:14,color:C.sub,marginBottom:14,lineHeight:1.6}}>Bruk som beslutningsgrunnlag i plenum. Strategiske dimensjoner legges til av arkitekten i analytikermodusen etterpå.</p>
+        <Card style={{padding:18,marginBottom:12}}>
+          <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",marginBottom:16}}>
+            <div style={{flex:1,marginRight:14}}>
+              <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:6}}><TypeBadge type={data.type}/></div>
+              <div style={{fontSize:17,fontWeight:700,color:C.text,lineHeight:1.3,marginBottom:4}}>{data.name||"Uten navn"}</div>
+              {data.what&&<div style={{fontSize:13,color:C.sub,lineHeight:1.5,marginBottom:5}}>{data.what}</div>}
+              {data.effect&&<div style={{fontSize:11,background:C.greenBg,color:C.green,padding:"2px 8px",borderRadius:20,fontWeight:600,display:"inline-flex",alignItems:"center",gap:4}}><Ico.Check s={10}/>{data.effect}</div>}
+              {data.replaces&&<div style={{fontSize:12,color:C.muted,marginTop:6}}>Erstatter: <span style={{color:C.sub}}>{data.replaces}</span></div>}
+            </div>
+            <div style={{textAlign:"center",background:nd<0?C.greenBg:nd>0?C.redBg:C.raised,border:`1px solid ${nd<0?C.greenBd:nd>0?C.redBd:C.border}`,borderRadius:10,padding:"10px 16px",flexShrink:0}}>
+              <div style={{fontSize:10,fontWeight:700,color:C.muted,textTransform:"uppercase",letterSpacing:"0.06em",marginBottom:3}}>Netto gjeld</div>
+              <div style={{fontSize:26,fontWeight:700,color:dc}}>{nd>0?"+":""}{nd}</div>
+            </div>
+          </div>
+          <div style={{display:"grid",gridTemplateColumns:"repeat(4,1fr)",gap:8}}>
+            {[{l:"Kostnad",v:cost>0?"kr "+fmt(cost):"–",c:C.text,bg:C.raised},{l:"Frigjort (brutto)",v:capKr>0?"kr "+fmt(capKr):"–",c:C.sub,bg:C.raised},{l:"Forventet verdi",v:xv>0?"kr "+fmt(xv):"–",c:C.green,bg:C.greenBg},{l:"xV-effektivitet",v:eff!=null?eff.toFixed(2)+"x":"–",c:eff>=1?C.green:eff!=null?C.red:C.sub,bg:eff>=1?C.greenBg:eff!=null?C.redBg:C.raised}].map(m=><Stat key={m.l} label={m.l} value={m.v} color={m.c} bg={m.bg}/>)}
+          </div>
+        </Card>
+        {sig.length>0&&<Card style={{padding:16,marginBottom:12}}><Lbl t="Gjeldsprofil"/>{sig.map(c=><DebtBar key={c.k} label={c.n} value={data.debts[c.k]} max={mx}/>)}</Card>}
+        {eff!=null&&eff>=1&&nd<=0&&<Tip color="green" text="Anbefalt for gjennomføring — positiv xV-effektivitet og netto gjeldsfrigjøring."/>}
+        {eff!=null&&eff<1&&<Tip color="red" text="Vurder grundigere — xV under 1,0."/>}
+        <Tip color="amber" text="Strategiske dimensjoner (fase, paradoksal spenning, orientering) legges til i analytikermodusen etter workshopen."/>
+      </div>
+    );
+  };
+
+  return (
+    <div>
+      <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:22}}>
+        <button onClick={onCancel} style={{display:"flex",alignItems:"center",gap:6,padding:"8px 15px",background:C.surface,color:C.sub,border:`1px solid ${C.border}`,borderRadius:8,fontSize:13,cursor:"pointer",fontFamily:"inherit"}}><Ico.Back s={14}/> Dashboard</button>
+        <div style={{display:"flex",alignItems:"center",gap:3}}>
+          {STEPS.map((s,i)=>(
+            <div key={i} style={{display:"flex",alignItems:"center",gap:3}}>
+              <div style={{display:"flex",alignItems:"center",gap:6}}>
+                <div style={{width:26,height:26,borderRadius:"50%",display:"flex",alignItems:"center",justifyContent:"center",fontSize:12,fontWeight:700,background:i===step?C.green:i<step?C.greenBg:C.raised,border:`2px solid ${i===step?C.green:i<step?C.greenBd:C.border}`,color:i===step?"#FFF":i<step?C.green:C.muted,boxShadow:i===step?`0 2px 8px rgba(13,122,86,.25)`:"none"}}>
+                  {i<step?<Ico.Check s={12}/>:i+1}
                 </div>
-            );
+                <span style={{fontSize:12,fontWeight:600,color:i===step?C.text:i<step?C.green:C.muted}}>{s}</span>
+              </div>
+              {i<STEPS.length-1&&<div style={{width:14,height:2,background:i<step?C.greenBd:C.border,margin:"0 3px",borderRadius:1}}/>}
+            </div>
+          ))}
+        </div>
+      </div>
+      <div style={{minHeight:400}}>
+        {step===0&&<S0/>}{step===1&&<S1/>}{step===2&&<S2/>}{step===3&&<S3/>}
+      </div>
+      <div style={{display:"flex",justifyContent:"space-between",marginTop:22,paddingTop:16,borderTop:`1px solid ${C.border}`}}>
+        <button onClick={()=>step>0?setStep(s=>s-1):onCancel()} style={{display:"flex",alignItems:"center",gap:6,padding:"9px 16px",background:C.surface,color:C.sub,border:`1px solid ${C.border}`,borderRadius:9,fontSize:14,cursor:"pointer",fontFamily:"inherit"}}><Ico.Back s={14}/>{step===0?"Avbryt":"Tilbake"}</button>
+        {step<3
+          ?<button disabled={step===0&&!data.name.trim()} onClick={()=>setStep(s=>s+1)} style={{display:"flex",alignItems:"center",gap:6,padding:"9px 20px",background:C.green,color:"#FFF",border:"none",borderRadius:9,fontSize:14,fontWeight:600,cursor:"pointer",opacity:step===0&&!data.name.trim()?0.35:1}}>Neste <Ico.Next s={14}/></button>
+          :<button onClick={save} style={{display:"flex",alignItems:"center",gap:6,padding:"9px 20px",background:C.green,color:"#FFF",border:"none",borderRadius:9,fontSize:14,fontWeight:600,cursor:"pointer"}}><Ico.Check s={14}/> Lagre valg</button>
         }
+      </div>
+    </div>
+  );
+}
 
-        // ── Roadmap ───────────────────────────────────────────────────────────
-        function Roadmap({ decisions, onOpen }) {
-            if (!decisions.length) return <div style={{ padding:"48px 0", textAlign:"center", color:C.muted, fontSize:14 }}>Legg til valg for å se fasekartet.</div>;
-            const phaseColors = { Assimilering:[C.blue,C.blueBg,C.blueBd], Rekonstruksjon:[C.amber,C.amberBg,C.amberBd], Materialisering:[C.green,C.greenBg,C.greenBd] };
+// ── Rotapplikasjon ───────────────────────────────────────────────────────────
+function App() {
+  const[view,setView]=useState("dashboard");
+  const[activeId,setActiveId]=useState(null);
+  const[decisions,setDecisions]=useState(()=>{
+    try { const s=localStorage.getItem("pdt_v3"); return s?JSON.parse(s):[]; }
+    catch(e){ return []; }
+  });
+  useEffect(()=>{ try{localStorage.setItem("pdt_v3",JSON.stringify(decisions));}catch(e){} },[decisions]);
 
-            return (
-                <div style={{ padding:"20px 22px" }}>
-                    <div style={{ fontSize:13, fontWeight:700, color:C.text, marginBottom:4 }}>Fasekart — veikart for ledelsen</div>
-                    <div style={{ fontSize:12, color:C.sub, marginBottom:12 }}>Tildel fase til hvert valg i analytikermodusen.</div>
-                    <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr 1fr", gap:12 }}>
-                        {PHASES.map((phase, i) => {
-                            const list = decisions.filter(d => d.phase === phase);
-                            const [tc, bg, bd] = phaseColors[phase] || [C.blue, C.blueBg, C.blueBd];
-                            return (
-                                <div key={phase}>
-                                    <div style={{ background:bg, border:`1px solid ${bd}`, borderRadius:10, padding:"10px 14px", marginBottom:8 }}>
-                                        <div style={{ fontSize:13, fontWeight:700, color:tc }}>{i+1}. {phase}</div>
-                                    </div>
-                                    {list.map(d => (
-                                        <div key={d.id} onClick={() => onOpen(d.id)} style={{ background:C.surface, border:`1px solid ${C.border}`, borderRadius:9, padding:"11px 13px", cursor:"pointer", marginBottom:7 }}>
-                                            <div style={{ fontSize:13, fontWeight:600, color:C.text, marginBottom:5 }}>{d.name}</div>
-                                            <TypeBadge type={d.type} />
-                                        </div>
-                                    ))}
-                                </div>
-                            );
-                        })}
-                    </div>
-                </div>
-            );
-        }
+  const save=d=>{setDecisions(p=>[...p,d]);setView("dashboard");};
+  const del=id=>setDecisions(p=>p.filter(d=>d.id!==id));
+  const update=(id,fields)=>setDecisions(p=>p.map(d=>d.id===id?{...d,...fields}:d));
+  const openDetail=id=>{setActiveId(id);setView("detail");};
+  const active=decisions.find(d=>d.id===activeId);
 
-        // ── Detail / Analytiker ───────────────────────────────────────────────
-        function Detail({ decision, onBack, onUpdate }) {
-            const [a, setA] = useState({ phase:decision.phase||"", tension:decision.tension||"", orient:decision.orient??null, notes:decision.notes||"" });
-            
-            const saveA = () => {
-                onUpdate(decision.id, { phase:a.phase||null, tension:a.tension||null, orient:a.orient, notes:a.notes });
-                onBack();
-            };
+  return (
+    <div style={{minHeight:"100vh",background:C.bg,color:C.text}}>
+      <header style={{background:C.surface,borderBottom:`1px solid ${C.border}`,padding:"12px 28px",display:"flex",alignItems:"center",justifyContent:"space-between",position:"sticky",top:0,zIndex:10,boxShadow:"0 1px 0 "+C.border}}>
+        <div style={{display:"flex",alignItems:"center",gap:10}}>
+          <div style={{width:30,height:30,borderRadius:8,background:C.green,display:"flex",alignItems:"center",justifyContent:"center",boxShadow:`0 2px 8px rgba(13,122,86,.3)`}}><span style={{color:"#FFF",fontSize:14,fontWeight:800}}>P</span></div>
+          <span style={{fontSize:15,fontWeight:700,color:C.text}}>Platform Decision Tool</span>
+          <span style={{fontSize:12,color:C.muted}}>· Digital Debt & xV</span>
+        </div>
+        <div style={{display:"flex",gap:16,alignItems:"center"}}>
+          {view==="detail"&&<Tag color="blue" text="Analytikermodusen"/>}
+          <span style={{fontSize:12,color:C.muted}}>{decisions.length} valg · {new Date().toLocaleDateString("nb-NO",{day:"numeric",month:"long",year:"numeric"})}</span>
+        </div>
+      </header>
+      <main style={{maxWidth:980,margin:"0 auto",padding:"32px 28px"}}>
+        {view==="dashboard"&&<Dashboard decisions={decisions} onNew={()=>setView("wizard")} onDelete={del} onOpen={openDetail}/>}
+        {view==="wizard"&&<Wizard onCancel={()=>setView("dashboard")} onSave={save}/>}
+        {view==="detail"&&active&&<Detail decision={active} onBack={()=>setView("dashboard")} onUpdate={update}/>}
+      </main>
+    </div>
+  );
+}
 
-            return (
-                <div>
-                    <button onClick={onBack} style={{ display:"flex", alignItems:"center", gap:7, padding:"8px 15px", background:C.surface, color:C.sub, border:`1px solid ${C.border}`, borderRadius:8, fontSize:14, cursor:"pointer", marginBottom:20 }}><Icon name="arrow-left" size={14}/> Dashboard</button>
-                    <h2>{decision.name}</h2>
-                    <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:20 }}>
-                        <Card style={{ padding:18 }}>
-                            <h4>Analytikermodusen</h4>
-                            <Lbl t="Transformasjonsfase" />
-                            <select style={{...IS, marginBottom:15}} value={a.phase} onChange={e => setA(p => ({ ...p, phase:e.target.value }))}>
-                                <option value="">Ikke tildelt</option>
-                                {PHASES.map(p => <option key={p}>{p}</option>)}
-                            </select>
-                            
-                            <Lbl t="Paradoksal spenning" />
-                            <select style={{...IS, marginBottom:15}} value={a.tension} onChange={e => setA(p => ({ ...p, tension:e.target.value }))}>
-                                <option value="">Ikke tildelt</option>
-                                {TENSIONS.map(x => <option key={x.k} value={x.k}>{x.l} — {x.d}</option>)}
-                            </select>
-
-                            <button onClick={saveA} style={{ width:"100%", padding:"10px", background:C.green, color:"#FFF", border:"none", borderRadius:8, cursor:"pointer", fontWeight:600 }}><Icon name="check" size={14}/> Lagre dimensjoner</button>
-                        </Card>
-                    </div>
-                </div>
-            );
-        }
-
-        // ── Dashboard ─────────────────────────────────────────────────────────
-        function Dashboard({ decisions, onNew, onDelete, onOpen }) {
-            const chartData = DEBTS.map(cat => ({ name:cat.s, Gjeld: decisions.reduce((a,b) => a + (b.debts[cat.k]||0), 0) }));
-            const nd = decisions.reduce((a,b)=>a+netDebt(b.debts), 0);
-
-            return (
-                <div style={{ display:"flex", flexDirection:"column", gap:24 }}>
-                    <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr 1fr", gap:14 }}>
-                        <Stat label="Registrerte tiltak" value={decisions.length} />
-                        <Stat label="Netto porteføljegjeld" value={(nd>0?"+":"")+nd} color={nd<0?C.green:nd>0?C.red:C.sub} bg={nd<0?C.greenBg:nd>0?C.redBg:C.raised} />
-                        <button onClick={onNew} style={{ background:C.green, color:"#FFF", border:"none", borderRadius:10, fontWeight:600, cursor:"pointer", display:"flex", alignItems:"center", justifyContent:"center", gap:8 }}><Icon name="plus" size={16}/> Ny beslutning</button>
-                    </div>
-
-                    <div style={{ display:"grid", gridTemplateColumns:"1.4fr 1fr", gap:20 }}>
-                        <div>
-                            {decisions.map(d => (
-                                <div key={d.id} onClick={() => onOpen(d.id)} style={{ background:C.surface, border:`1px solid ${C.border}`, borderRadius:10, padding:"14px 18px", cursor:"pointer", display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:8 }}>
-                                    <div>
-                                        <div style={{ fontWeight:700, marginBottom:6 }}>{d.name}</div>
-                                        <TypeBadge type={d.type} /> {d.phase && <Tag color="blue" text={d.phase} />}
-                                    </div>
-                                    <div style={{ display:"flex", alignItems:"center", gap:16 }}>
-                                        <span style={{ fontWeight:700, color:netDebt(d.debts)>0?C.red:C.green }}>{netDebt(d.debts)>0?"+":""}{netDebt(d.debts)}</span>
-                                        <button onClick={e => { e.stopPropagation(); onDelete(d.id); }} style={{ background:"none", border:"none", cursor:"pointer" }}><Icon name="trash-2" size={16} className="text-muted"/></button>
-                                    </div>
-                                </div>
-                            ))}
-                        </div>
-                        <Card style={{ padding:"18px 12px" }}>
-                            <div style={{ height:210 }}>
-                                <ResponsiveContainer>
-                                    <BarChart data={chartData} margin={{ top:5, right:5, left:-25, bottom:5 }}>
-                                        <XAxis dataKey="name" stroke={C.sub} fontSize={10} tickLine={false} />
-                                        <YAxis stroke={C.sub} fontSize={10} tickLine={false} />
-                                        <Tooltip content={<ChartTT />} cursor={{ fill:C.raised }} />
-                                        <Bar dataKey="Gjeld">
-                                            {chartData.map((entry, idx) => <Cell key={idx} fill={entry.Gjeld < 0 ? C.green : entry.Gjeld > 0 ? C.red : C.muted} />)}
-                                        </Bar>
-                                    </BarChart>
-                                </ResponsiveContainer>
-                            </div>
-                        </Card>
-                    </div>
-
-                    <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:20 }}>
-                        <Card><Matrix decisions={decisions} onOpen={onOpen} /></Card>
-                        <Card><Roadmap decisions={decisions} onOpen={onOpen} /></Card>
-                    </div>
-                </div>
-            );
-        }
-
-        // ── Wizard (Opprett nytt) ─────────────────────────────────────────────
-        function Wizard({ onCancel, onSave }) {
-            const [d, setD] = useState({ name:"", type:"tech", debts:emptyD() });
-            
-            return (
-                <Card style={{ maxWidth:640, margin:"0 auto", padding:24 }}>
-                    <h3>Opprett nytt tiltak</h3>
-                    <Lbl t="Navn" />
-                    <input type="text" style={{...IS, marginBottom:16}} value={d.name} onChange={e => setD({...d, name:e.target.value})} />
-                    
-                    <Lbl t="Gjeldskonfigurasjon (-5 til +5)" />
-                    {DEBTS.map(cat => (
-                        <div key={cat.k} style={{ marginBottom:10 }}>
-                            <div style={{ display:"flex", justifyContent:"space-between", fontSize:12 }}>
-                                <span>{cat.n}</span><span style={{ fontWeight:700 }}>{d.debts[cat.k] || 0}</span>
-                            </div>
-                            <input type="range" min="-5" max="5" value={d.debts[cat.k] || 0} onChange={e => setD({...d, debts:{...d.debts, [cat.k]:parseInt(e.target.value)}})} style={{ width:"100%" }} />
-                        </div>
-                    ))}
-                    
-                    <div style={{ display:"flex", gap:10, marginTop:20 }}>
-                        <button onClick={onCancel} style={{ flex:1, padding:10, background:C.raised, border:"none", borderRadius:8 }}>Avbryt</button>
-                        <button onClick={() => onSave({...d, id:Date.now()})} style={{ flex:1, padding:10, background:C.green, color:"#FFF", border:"none", borderRadius:8 }}>Lagre tiltak</button>
-                    </div>
-                </Card>
-            );
-        }
-
-        // ── Hovedapplikasjon (inkl. LocalStorage) ─────────────────────────────
-        function PlatformDebtTool() {
-            const [view, setView] = useState("dashboard");
-            const [selectedId, setSelectedId] = useState(null);
-            
-            // Last inn fra nettleserens lagring
-            const [decisions, setDecisions] = useState(() => {
-                const saved = localStorage.getItem("platform_decisions_v2");
-                if (saved) return JSON.parse(saved);
-                return [
-                    { id: 1, name: "CI/CD Pipeline", type: "process", phase: "Assimilering", debts: { ideology: 0, competence: -2, working_env: -3, user_sat: -1, reputation: -1, infra: -2, shadow_it: -2, technical: -3, governance: -1 } }
-                ];
-            });
-
-            // Lagre til nettleseren ved endring
-            useEffect(() => { localStorage.setItem("platform_decisions_v2", JSON.stringify(decisions)); }, [decisions]);
-
-            const add = d => { setDecisions([...decisions, d]); setView("dashboard"); };
-            const del = id => setDecisions(decisions.filter(x => x.id !== id));
-            const open = id => { setSelectedId(id); setView("detail"); };
-            const update = (id, fields) => setDecisions(decisions.map(x => x.id === id ? { ...x, ...fields } : x));
-
-            const activeD = decisions.find(x => x.id === selectedId);
-
-            return (
-                <div style={{ background:C.bg, minHeight:"100vh" }}>
-                    <header style={{ background:C.surface, borderBottom:`1px solid ${C.border}`, padding:"13px 24px", display:"flex", alignItems:"center", gap:10 }}>
-                        <div style={{ width:30, height:30, borderRadius:8, background:C.green, display:"flex", alignItems:"center", justifyContent:"center" }}>
-                            <span style={{ color:"#FFF", fontSize:14, fontWeight:800 }}>P</span>
-                        </div>
-                        <span style={{ fontSize:15, fontWeight:700 }}>Platform Decision Tool</span>
-                    </header>
-                    <main style={{ maxWidth:980, margin:"0 auto", padding:"32px 28px" }}>
-                        {view === "dashboard" && <Dashboard decisions={decisions} onNew={() => setView("wizard")} onDelete={del} onOpen={open} />}
-                        {view === "wizard"    && <Wizard onCancel={() => setView("dashboard")} onSave={add} />}
-                        {view === "detail"    && activeD && <Detail decision={activeD} onBack={() => setView("dashboard")} onUpdate={update} />}
-                    </main>
-                </div>
-            );
-        }
-
-        const root = ReactDOM.createRoot(document.getElementById('root'));
-        root.render(<PlatformDebtTool />);
+ReactDOM.createRoot(document.getElementById("root")).render(<App/>);
     </script>
 </body>
 </html>
